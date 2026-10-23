@@ -28,6 +28,17 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+function fechaHoyColombia() {
+    const partes = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Bogota",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(new Date());
+    const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+    return `${valores.year}-${valores.month}-${valores.day}`;
+}
+
 // --- TABLAS ---
 function tableHasColumn(tableName, columnName) {
     const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
@@ -112,7 +123,7 @@ const actualizarEstadoPrestamo = (prestamoId) => {
 
     const saldo = Number(prestamo.saldo_actual || 0);
     const estado = saldo <= 0 ? "Pagado" : "Pendiente";
-    db.prepare("UPDATE prestamos SET estado = ?, fecha_actualizacion = ? WHERE id = ?").run(estado, new Date().toISOString().split("T")[0], prestamoId);
+    db.prepare("UPDATE prestamos SET estado = ?, fecha_actualizacion = ? WHERE id = ?").run(estado, fechaHoyColombia(), prestamoId);
 };
 
 // --- RUTAS DE CLIENTES ---
@@ -129,7 +140,7 @@ app.post("/api/clientes", (req, res) => {
     try {
         const { nombre, documento, telefono, direccion } = req.body;
         if (!nombre || !documento) return res.status(400).json({ error: "Nombre y documento requeridos" });
-        const fecha = new Date().toISOString().split("T")[0];
+        const fecha = fechaHoyColombia();
         const resDb = db.prepare("INSERT INTO clientes (nombre, documento, telefono, direccion, fecha_registro) VALUES (?, ?, ?, ?, ?)").run(nombre, documento, telefono || "", direccion || "", fecha);
         res.json({ mensaje: "Cliente registrado", id: resDb.lastInsertRowid });
     } catch (error) {
@@ -218,7 +229,7 @@ app.post("/api/prestamos", (req, res) => {
 
         const interes = montoNumber * 0.20;
         const total = montoNumber + interes;
-        const fecha = new Date().toISOString().split("T")[0];
+        const fecha = fechaHoyColombia();
         const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
         const resDb = db.prepare("INSERT INTO prestamos (cliente_id, monto, porcentaje, interes, total, saldo_actual, fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, estado, fecha_actualizacion) VALUES (?, ?, 20, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)").run(cliente_id, montoNumber, interes, total, total, fecha, fechaLimite, frecuencia_pago, numeroCuotas, fecha);
         res.json({
@@ -227,6 +238,7 @@ app.post("/api/prestamos", (req, res) => {
             total,
             saldo_actual: total,
             valor_cuota: total / numeroCuotas,
+            fecha_prestamo: fecha,
             fecha_limite: fechaLimite
         });
     } catch (error) {
@@ -266,7 +278,7 @@ app.post("/api/pagos", (req, res) => {
             return res.status(400).json({ error: "El pago excede el saldo pendiente del préstamo" });
         }
 
-        const fecha = new Date().toISOString().split("T")[0];
+        const fecha = fechaHoyColombia();
         const pagoResult = db.prepare("INSERT INTO pagos (prestamo_id, monto, fecha_pago, metodo_pago, observacion) VALUES (?, ?, ?, ?, ?)").run(prestamo_id, montoPago, fecha, metodo_pago || "efectivo", observacion || "");
 
         const nuevoSaldo = saldoActual - montoPago;
@@ -287,7 +299,7 @@ app.put("/api/prestamos/:id/pagar", (req, res) => {
             return res.status(404).json({ error: "Préstamo no encontrado" });
         }
 
-        const fecha = new Date().toISOString().split("T")[0];
+        const fecha = fechaHoyColombia();
         const saldoActual = Number(prestamo.saldo_actual || 0);
         const montoPago = saldoActual > 0 ? saldoActual : 0;
 
@@ -313,7 +325,7 @@ app.delete("/api/prestamos/:id", (req, res) => {
 
 app.get("/api/resumen", (req, res) => {
     try {
-        const hoy = new Date().toISOString().split("T")[0];
+        const hoy = fechaHoyColombia();
         const resumen = db.prepare(`
             SELECT
                 COALESCE(SUM(monto), 0) AS dinero_prestado,

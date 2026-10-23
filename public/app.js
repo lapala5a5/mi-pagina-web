@@ -15,6 +15,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
             actualizarTipoCliente();
             actualizarTotalPrestamo();
+            programarActualizacionMedianoche();
+            window.addEventListener("focus", actualizarTotalPrestamo);
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) actualizarTotalPrestamo();
+            });
         });
     });
     actualizarTipoCliente();
@@ -113,6 +118,7 @@ function actualizarTotalPrestamo() {
         document.getElementById("pres-valor-cuota").textContent = "$0";
         calendario.replaceChildren();
         fechaLimite.value = "";
+        document.getElementById("pres-fecha-inicio").textContent = "";
         return;
     }
 
@@ -122,7 +128,9 @@ function actualizarTotalPrestamo() {
     const valorCuota = (centavosPorCuota + (cuotasConCentavoExtra > 0 ? 1 : 0)) / 100;
     document.getElementById("pres-valor-cuota").textContent = formatoMoneda(valorCuota);
 
-    const fechaInicio = new Date().toISOString().slice(0, 10);
+    const fechaInicio = fechaHoyColombia();
+    document.getElementById("pres-fecha-inicio").textContent =
+        `Inicio del calendario: ${fechaLegible(fechaInicio)} (hora de Colombia)`;
     const fechas = Array.from({ length: cuotas }, (_, indice) =>
         fechaCobro(fechaInicio, frecuencia, indice + 1)
     );
@@ -133,6 +141,36 @@ function actualizarTotalPrestamo() {
         return elemento;
     }));
     fechaLimite.value = fechas[fechas.length - 1];
+}
+
+function fechaHoyColombia() {
+    const partes = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Bogota",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(new Date());
+    const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+    return `${valores.year}-${valores.month}-${valores.day}`;
+}
+
+function programarActualizacionMedianoche() {
+    const ahora = new Date();
+    const partes = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Bogota",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+    }).formatToParts(ahora);
+    const valores = Object.fromEntries(partes.map(parte => [parte.type, Number(parte.value)]));
+    const segundosDelDia = valores.hour * 3600 + valores.minute * 60 + valores.second;
+    const milisegundosHastaMedianoche = (86400 - segundosDelDia) * 1000 - ahora.getMilliseconds() + 50;
+
+    setTimeout(() => {
+        actualizarTotalPrestamo();
+        programarActualizacionMedianoche();
+    }, milisegundosHastaMedianoche);
 }
 
 function fechaCobro(fechaInicio, frecuencia, numeroCuota) {
@@ -443,7 +481,7 @@ async function registrarPago(clienteId, montoPagado, saldoRestante, telefonoClie
             }
 
             // 2. Armar el texto del recibo con Saltos de línea (%0A) y negritas (*)
-            const fecha = new Date().toLocaleDateString('es-CO');
+            const fecha = new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota' });
             const mensaje = `*COMPROBANTE DE PAGO*%0A%0A` +
                             `*Cliente:* ${encodeURIComponent(nombreCliente)}%0A` +
                             `*Fecha:* ${fecha}%0A` +

@@ -36,7 +36,23 @@ async function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function fechaColombia(fecha = new Date()) {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(fecha);
+  const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+  return `${valores.year}-${valores.month}-${valores.day}`;
+}
+
 (async () => {
+  if (fechaColombia(new Date('2026-10-23T04:59:59.999Z')) !== '2026-10-22'
+    || fechaColombia(new Date('2026-10-23T05:00:00.000Z')) !== '2026-10-23') {
+    throw new Error('La fecha debe cambiar a medianoche de Colombia (GMT-5).');
+  }
+
   const server = spawn(process.execPath, [path.join(projectDir, 'server.js')], {
     cwd: tempDir,
     env: { ...process.env, PORT: String(PORT) },
@@ -80,9 +96,11 @@ async function wait(ms) {
 
     const prestamoBody = JSON.parse(prestamoRes.body);
     const prestamoId = prestamoBody.id;
-    const fechaEsperada = new Date();
+    const fechaEsperada = new Date(`${fechaColombia()}T00:00:00Z`);
     fechaEsperada.setUTCDate(fechaEsperada.getUTCDate() + 28);
-    if (prestamoBody.valor_cuota !== 300 || prestamoBody.fecha_limite !== fechaEsperada.toISOString().split('T')[0]) {
+    if (prestamoBody.valor_cuota !== 300
+      || prestamoBody.fecha_prestamo !== fechaColombia()
+      || prestamoBody.fecha_limite !== fechaEsperada.toISOString().split('T')[0]) {
       throw new Error(`El resumen de cuotas no coincide con la frecuencia semanal: ${prestamoRes.body}`);
     }
 
