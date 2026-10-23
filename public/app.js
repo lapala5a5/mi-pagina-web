@@ -4,17 +4,18 @@ document.addEventListener("DOMContentLoaded", () => {
     cargarPrestamos();
     cargarResumen();
 
-    // Event listener para el formulario de nuevo cliente
-    const formCliente = document.getElementById("form-cliente");
-    if (formCliente) {
-        formCliente.addEventListener("submit", registrarCliente);
-    }
-
-    // Event listener para el formulario de nuevo préstamo
-    const formPrestamo = document.getElementById("form-prestamo");
-    if (formPrestamo) {
-        formPrestamo.addEventListener("submit", registrarPrestamo);
-    }
+    document.getElementById("form-operacion").addEventListener("submit", registrarOperacion);
+    document.querySelectorAll('input[name="tipo-cliente"]').forEach(opcion => {
+        opcion.addEventListener("change", actualizarTipoCliente);
+    });
+    document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
+    document.getElementById("form-operacion").addEventListener("reset", () => {
+        setTimeout(() => {
+            actualizarTipoCliente();
+            actualizarTotalPrestamo();
+        });
+    });
+    actualizarTipoCliente();
 });
 
 // Cabeceras globales para evitar problemas con Ngrok
@@ -31,13 +32,23 @@ async function cargarClientes() {
         const res = await fetch("/api/clientes", { headers: HEADERS_BASE });
         const clientes = await res.json();
 
-        // Actualizar Select de préstamos
+        // Actualizar selector de cliente en el formulario unificado
         const select = document.getElementById("pres-cliente");
         if (select) {
-            select.innerHTML = '<option value="">Seleccione un cliente...</option>';
-            clientes.forEach(c => {
-                select.innerHTML += `<option value="${c.id}">${c.nombre} (${c.documento})</option>`;
+            const clienteSeleccionado = select.value;
+            select.replaceChildren(new Option("Seleccione un cliente...", ""));
+            clientes.forEach(cliente => {
+                select.add(new Option(`${cliente.nombre} (${cliente.documento})`, cliente.id));
             });
+            if (clientes.some(cliente => String(cliente.id) === clienteSeleccionado)) {
+                select.value = clienteSeleccionado;
+            }
+            document.getElementById("sin-clientes-aviso").classList.toggle("hidden", clientes.length > 0);
+            document.querySelector('input[name="tipo-cliente"][value="existente"]').disabled = clientes.length === 0;
+            if (clientes.length === 0) {
+                document.querySelector('input[name="tipo-cliente"][value="nuevo"]').checked = true;
+                actualizarTipoCliente();
+            }
         }
 
         // Actualizar Tabla de clientes
@@ -69,33 +80,87 @@ async function cargarClientes() {
     }
 }
 
-// 2. Registrar un nuevo cliente
-async function registrarCliente(e) {
+function actualizarTipoCliente() {
+    const opcionesCliente = document.querySelectorAll('input[name="tipo-cliente"]');
+    const tieneClientes = !opcionesCliente[0].disabled;
+    if (!tieneClientes) {
+        opcionesCliente[1].checked = true;
+    }
+    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
+    document.getElementById("cliente-existente-campo").classList.toggle("hidden", esNuevo);
+    document.getElementById("nuevo-cliente-campos").classList.toggle("hidden", !esNuevo);
+
+    const selector = document.getElementById("pres-cliente");
+    selector.required = !esNuevo;
+    document.getElementById("cli-nombre").required = esNuevo;
+    document.getElementById("cli-documento").required = esNuevo;
+}
+
+function actualizarTotalPrestamo() {
+    const monto = Number(document.getElementById("pres-monto").value) || 0;
+    document.getElementById("pres-total").textContent = `$${(monto * 1.2).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+}
+
+// Registrar el cliente (si es nuevo) y su préstamo desde un único formulario.
+async function registrarOperacion(e) {
     e.preventDefault();
-    const nombre = document.getElementById("cli-nombre").value;
-    const documento = document.getElementById("cli-documento").value;
-    const telefono = document.getElementById("cli-telefono").value;
-    const direccion = document.getElementById("cli-direccion").value;
+    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
+    let clienteId = document.getElementById("pres-cliente").value;
+    let clienteCreado = false;
 
     try {
-        const res = await fetch("/api/clientes", {
+        if (esNuevo) {
+            const clienteRes = await fetch("/api/clientes", {
+                method: "POST",
+                headers: HEADERS_BASE,
+                body: JSON.stringify({
+                    nombre: document.getElementById("cli-nombre").value.trim(),
+                    documento: document.getElementById("cli-documento").value.trim(),
+                    telefono: document.getElementById("cli-telefono").value.trim(),
+                    direccion: document.getElementById("cli-direccion").value.trim()
+                })
+            });
+            const clienteData = await clienteRes.json();
+            if (!clienteRes.ok) {
+                alert("No se pudo registrar el cliente: " + (clienteData.error || "Error desconocido"));
+                return;
+            }
+            clienteId = clienteData.id;
+            clienteCreado = true;
+        }
+
+        const prestamoRes = await fetch("/api/prestamos", {
             method: "POST",
             headers: HEADERS_BASE,
-            body: JSON.stringify({ nombre, documento, telefono, direccion })
+            body: JSON.stringify({
+                cliente_id: clienteId,
+                monto: document.getElementById("pres-monto").value,
+                fecha_limite: document.getElementById("pres-limite").value
+            })
         });
+        const prestamoData = await prestamoRes.json();
 
-        const data = await res.json();
-
-        if (res.ok) {
-            document.getElementById("form-cliente").reset();
-            cargarClientes();
-            alert("Cliente registrado correctamente");
-        } else {
-            alert("Error: " + (data.error || "No se pudo registrar"));
+        if (!prestamoRes.ok) {
+            if (clienteCreado) {
+                await cargarClientes();
+                alert(`El cliente quedó registrado, pero no se pudo crear el préstamo: ${prestamoData.error || "Error desconocido"}`);
+            } else {
+                alert("No se pudo crear el préstamo: " + (prestamoData.error || "Error desconocido"));
+            }
+            return;
         }
+
+        document.getElementById("form-operacion").reset();
+        await Promise.all([cargarClientes(), cargarPrestamos(), cargarResumen()]);
+        alert(clienteCreado ? "Cliente y préstamo registrados correctamente" : "Préstamo registrado correctamente");
     } catch (error) {
-        console.error("Error al registrar cliente:", error);
-        alert("Error de conexión con el servidor");
+        console.error("Error al registrar cliente y préstamo:", error);
+        if (clienteCreado) {
+            await cargarClientes();
+            alert("El cliente quedó registrado, pero hubo un error de conexión al crear el préstamo.");
+        } else {
+            alert("Error de conexión con el servidor");
+        }
     }
 }
 
@@ -187,41 +252,6 @@ async function cargarPrestamos() {
         });
     } catch (error) {
         console.error("Error al cargar préstamos:", error);
-    }
-}
-
-// 5. Registrar nuevo préstamo
-async function registrarPrestamo(e) {
-    e.preventDefault();
-    const cliente_id = document.getElementById("pres-cliente").value;
-    const monto = document.getElementById("pres-monto").value;
-    const fecha_limite = document.getElementById("pres-limite").value;
-
-    if (!cliente_id) {
-        alert("Selecciona un cliente");
-        return;
-    }
-
-    try {
-        const res = await fetch("/api/prestamos", {
-            method: "POST",
-            headers: HEADERS_BASE,
-            body: JSON.stringify({ cliente_id, monto, fecha_limite })
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            document.getElementById("form-prestamo").reset();
-            cargarPrestamos();
-            cargarResumen();
-            alert("Préstamo registrado exitosamente");
-        } else {
-            alert("Error: " + (data.error || "No se pudo registrar el préstamo"));
-        }
-    } catch (error) {
-        console.error("Error al registrar préstamo:", error);
-        alert("Error de conexión");
     }
 }
 

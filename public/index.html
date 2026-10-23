@@ -3,102 +3,167 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistema de Préstamos (20%)</title>
+  <title>Control de Préstamos</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-gray-100 p-4 sm:p-6 font-sans">
-  <div class="max-w-6xl mx-auto space-y-6">
-    <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">💰 Control de Préstamos (20% Fijo)</h1>
+<body class="min-h-screen bg-slate-50 p-4 font-sans text-slate-800 sm:p-6">
+  <main class="mx-auto max-w-6xl space-y-7">
+    <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">Panel de administración</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Control de préstamos</h1>
+      </div>
+      <p class="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800">Interés fijo del 20%</p>
+    </header>
 
-    <!-- Métrica Financiera -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
-        <p class="text-gray-500 text-xs sm:text-sm">Total Prestado</p>
-        <p id="res-prestado" class="text-lg sm:text-2xl font-bold text-gray-800">$0</p>
+    <section aria-label="Resumen financiero" class="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+      <div class="metric-card border-blue-500">
+        <p class="metric-label">Total prestado</p>
+        <p id="res-prestado" class="metric-value">$0</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
-        <p class="text-gray-500 text-xs sm:text-sm">Por Cobrar</p>
-        <p id="res-cobrar" class="text-lg sm:text-2xl font-bold text-gray-800">$0</p>
+      <div class="metric-card border-amber-500">
+        <p class="metric-label">Por cobrar</p>
+        <p id="res-cobrar" class="metric-value">$0</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
-        <p class="text-gray-500 text-xs sm:text-sm">Intereses (20%)</p>
-        <p id="res-intereses" class="text-lg sm:text-2xl font-bold text-gray-800">$0</p>
+      <div class="metric-card border-emerald-500">
+        <p class="metric-label">Intereses (20%)</p>
+        <p id="res-intereses" class="metric-value">$0</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-red-500">
-        <p class="text-gray-500 text-xs sm:text-sm">Vencidos</p>
-        <p id="res-vencidos" class="text-lg sm:text-2xl font-bold text-gray-800">0</p>
+      <div class="metric-card border-rose-500">
+        <p class="metric-label">Vencidos</p>
+        <p id="res-vencidos" class="metric-value">0</p>
       </div>
-    </div>
+    </section>
 
-    <!-- Formularios -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="text-xl font-semibold mb-4 text-gray-700">Registrar Cliente</h2>
-        <form id="form-cliente" class="space-y-3">
-          <input type="text" id="cli-nombre" placeholder="Nombre completo" required class="w-full border p-2 rounded">
-          <input type="text" id="cli-documento" placeholder="Cédula / Documento" required class="w-full border p-2 rounded">
-          <input type="text" id="cli-telefono" placeholder="Teléfono" class="w-full border p-2 rounded">
-          <input type="text" id="cli-direccion" placeholder="Dirección" class="w-full border p-2 rounded">
-          <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700">Guardar Cliente</button>
-        </form>
+    <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <div class="bg-gradient-to-r from-blue-700 to-indigo-700 px-5 py-5 text-white sm:px-7">
+        <p class="text-sm font-medium text-blue-100">Un solo paso, todo listo</p>
+        <h2 class="mt-1 text-xl font-bold sm:text-2xl">Registrar cliente y préstamo</h2>
+        <p class="mt-1 max-w-2xl text-sm text-blue-100">Elige un cliente existente o registra uno nuevo y completa los datos del préstamo.</p>
       </div>
 
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="text-xl font-semibold mb-4 text-gray-700">Nuevo Préstamo (+20%)</h2>
-        <form id="form-prestamo" class="space-y-3">
-          <select id="pres-cliente" required class="w-full border p-2 rounded">
-            <option value="">Seleccione un cliente...</option>
+      <form id="form-operacion" class="space-y-6 p-5 sm:p-7">
+        <fieldset>
+          <legend class="mb-3 text-sm font-semibold text-slate-700">¿A quién se le prestará?</legend>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="choice-card">
+              <input type="radio" name="tipo-cliente" value="existente" checked>
+              <span>
+                <span class="block font-semibold text-slate-800">Cliente existente</span>
+                <span class="mt-0.5 block text-sm text-slate-500">Seleccionar de la lista</span>
+              </span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="tipo-cliente" value="nuevo">
+              <span>
+                <span class="block font-semibold text-slate-800">Nuevo cliente</span>
+                <span class="mt-0.5 block text-sm text-slate-500">Registrar sus datos ahora</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div id="cliente-existente-campo">
+          <label for="pres-cliente" class="field-label">Cliente</label>
+          <select id="pres-cliente" required class="field-control">
+            <option value="">Cargando clientes...</option>
           </select>
-          <input type="number" id="pres-monto" placeholder="Monto a prestar" required class="w-full border p-2 rounded">
-          <input type="date" id="pres-limite" class="w-full border p-2 rounded">
-          <button type="submit" class="w-full bg-green-600 text-white py-2 rounded font-medium hover:bg-green-700">Crear Préstamo</button>
-        </form>
-      </div>
-    </div>
+          <p id="sin-clientes-aviso" class="mt-2 hidden text-sm text-amber-700">Todavía no hay clientes registrados. Completa los datos del nuevo cliente.</p>
+        </div>
 
-    <!-- Lista de Préstamos -->
-    <div class="bg-white p-6 rounded-xl shadow">
-      <h2 class="text-xl font-semibold mb-4 text-gray-700">Historial de Préstamos</h2>
+        <div id="nuevo-cliente-campos" class="hidden rounded-xl border border-blue-100 bg-blue-50/60 p-4 sm:p-5">
+          <h3 class="mb-4 font-semibold text-slate-800">Datos del nuevo cliente</h3>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="cli-nombre" class="field-label">Nombre completo <span class="text-rose-600">*</span></label>
+              <input type="text" id="cli-nombre" autocomplete="name" placeholder="Ej. María López" class="field-control">
+            </div>
+            <div>
+              <label for="cli-documento" class="field-label">Cédula / documento <span class="text-rose-600">*</span></label>
+              <input type="text" id="cli-documento" autocomplete="off" placeholder="Número de documento" class="field-control">
+            </div>
+            <div>
+              <label for="cli-telefono" class="field-label">Teléfono</label>
+              <input type="tel" id="cli-telefono" autocomplete="tel" placeholder="Número de contacto" class="field-control">
+            </div>
+            <div>
+              <label for="cli-direccion" class="field-label">Dirección</label>
+              <input type="text" id="cli-direccion" autocomplete="street-address" placeholder="Dirección (opcional)" class="field-control">
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-5">
+          <h3 class="mb-4 font-semibold text-slate-800">Datos del préstamo</h3>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="pres-monto" class="field-label">Monto a prestar <span class="text-rose-600">*</span></label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                <input type="number" id="pres-monto" min="1" step="any" placeholder="0" required class="field-control pl-8">
+              </div>
+            </div>
+            <div>
+              <label for="pres-limite" class="field-label">Fecha límite de pago</label>
+              <input type="date" id="pres-limite" class="field-control">
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
+            <span class="text-slate-600">Total a pagar con interés (20%)</span>
+            <strong id="pres-total" class="text-lg text-slate-900">$0</strong>
+          </div>
+        </div>
+
+        <div class="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+          <button type="reset" class="rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50">Limpiar</button>
+          <button type="submit" class="rounded-lg bg-blue-700 px-6 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Registrar operación</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <h2 class="text-lg font-bold text-slate-900">Historial de préstamos</h2>
+        <p class="mt-1 text-sm text-slate-500">Consulta saldos, estados y registra pagos.</p>
+      </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-left">
           <thead>
-            <tr class="border-b bg-gray-50 text-gray-600 text-sm">
-              <th class="p-3">Cliente</th>
-              <th class="p-3">Monto</th>
-              <th class="p-3">Saldo</th>
-              <th class="p-3">Total (+20%)</th>
-              <th class="p-3">Límite</th>
-              <th class="p-3">Estado</th>
-              <th class="p-3">Acciones</th>
+            <tr class="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <th class="whitespace-nowrap p-3 sm:p-4">Cliente</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Monto</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Saldo</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Total (+20%)</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Límite</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Estado</th>
+              <th class="whitespace-nowrap p-3 sm:p-4">Acciones</th>
             </tr>
           </thead>
           <tbody id="tabla-prestamos"></tbody>
         </table>
       </div>
-    </div>
-  </div>
+    </section>
 
+    <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <h2 class="text-lg font-bold text-slate-900">Clientes registrados</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <th class="p-3 sm:p-4">Nombre</th>
+              <th class="p-3 sm:p-4">Documento</th>
+              <th class="p-3 sm:p-4">Teléfono</th>
+              <th class="p-3 sm:p-4">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-clientes"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
   <script src="app.js"></script>
 </body>
 </html>
-<!-- Lista de Clientes Registrados -->
-<div class="bg-white p-6 rounded-xl shadow mt-6">
-  <h2 class="text-xl font-semibold mb-4 text-gray-700">Lista de Clientes</h2>
-  <div class="overflow-x-auto">
-    <table class="w-full text-left border-collapse">
-      <thead>
-        <tr class="border-b bg-gray-50 text-gray-600 text-sm">
-          <th class="p-3">Nombre</th>
-          <th class="p-3">Documento</th>
-          <th class="p-3">Teléfono</th>
-          <th class="p-3">Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="tabla-clientes"></tbody>
-    </table>
-  </div>
-</div><button 
-    onclick="enviarWhatsApp('${p.telefono}', '${p.cliente}', '${p.monto}')"
-    class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded ml-2">
-    📱 WhatsApp
-</button>

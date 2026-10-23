@@ -1,14 +1,90 @@
-.btn-whatsapp {
-    display: inline-block;
-    background-color: #25D366;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 5px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 14px;
+body {
+    background:
+        radial-gradient(ellipse at 12% 0%, rgba(219, 234, 254, 0.7), transparent 32rem),
+        #f8fafc;
 }
 
-.btn-whatsapp:hover {
-    background-color: #128C7E;
+.metric-card {
+    min-width: 0;
+    border-left-width: 4px;
+    border-radius: 0.9rem;
+    background: #fff;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.metric-label {
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.metric-value {
+    margin-top: 0.35rem;
+    overflow-wrap: anywhere;
+    color: #0f172a;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    font-weight: 700;
+}
+
+.choice-card {
+    display: flex;
+    cursor: pointer;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.choice-card:has(input:checked) {
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 0 0 1px #2563eb;
+}
+
+.choice-card input {
+    margin-top: 0.25rem;
+    accent-color: #1d4ed8;
+}
+
+.choice-card:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.field-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #334155;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.field-control {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.55rem;
+    background: #fff;
+    padding: 0.65rem 0.75rem;
+    color: #0f172a;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.field-control:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.field-control::placeholder {
+    color: #94a3b8;
+}
+
+@media (max-width: 640px) {
+    .metric-card {
+        padding: 0.8rem;
+    }
 }
