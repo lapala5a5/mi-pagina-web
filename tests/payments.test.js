@@ -1,8 +1,12 @@
 const { spawn } = require('child_process');
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const PORT = 4100;
-const projectDir = 'c:/Users/Lucy/Desktop/base de datos';
+const projectDir = path.resolve(__dirname, '..');
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prestamos-test-'));
 
 function request(method, urlPath, body = null) {
   return new Promise((resolve, reject) => {
@@ -33,8 +37,8 @@ async function wait(ms) {
 }
 
 (async () => {
-  const server = spawn(process.execPath, ['server.js'], {
-    cwd: projectDir,
+  const server = spawn(process.execPath, [path.join(projectDir, 'server.js')], {
+    cwd: tempDir,
     env: { ...process.env, PORT: String(PORT) },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -65,7 +69,8 @@ async function wait(ms) {
     const prestamoRes = await request('POST', '/api/prestamos', {
       cliente_id: clienteId,
       monto: 1000,
-      fecha_limite: '2026-11-30'
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 4
     });
 
     if (prestamoRes.statusCode !== 200) {
@@ -75,6 +80,27 @@ async function wait(ms) {
 
     const prestamoBody = JSON.parse(prestamoRes.body);
     const prestamoId = prestamoBody.id;
+    const fechaEsperada = new Date();
+    fechaEsperada.setUTCDate(fechaEsperada.getUTCDate() + 28);
+    if (prestamoBody.valor_cuota !== 300 || prestamoBody.fecha_limite !== fechaEsperada.toISOString().split('T')[0]) {
+      throw new Error(`El resumen de cuotas no coincide con la frecuencia semanal: ${prestamoRes.body}`);
+    }
+
+    const prestamoInvalido = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 0
+    });
+    if (prestamoInvalido.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar el número de cuotas inválido: ${prestamoInvalido.body}`);
+    }
+
+    const listaPrestamos = await request('GET', '/api/prestamos');
+    const prestamoGuardado = JSON.parse(listaPrestamos.body).find(prestamo => prestamo.id === prestamoId);
+    if (prestamoGuardado.frecuencia_pago !== 'Semanal' || prestamoGuardado.numero_cuotas !== 4) {
+      throw new Error(`La modalidad y el número de cuotas no se conservaron: ${listaPrestamos.body}`);
+    }
 
     const pagoRes = await request('POST', '/api/pagos', {
       prestamo_id: prestamoId,
@@ -95,7 +121,12 @@ async function wait(ms) {
     }
 
     console.log('El flujo completo de cliente, préstamo y pago funciona correctamente.');
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
   } finally {
     server.kill('SIGTERM');
+    await new Promise(resolve => server.once('exit', resolve));
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 })();

@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
         opcion.addEventListener("change", actualizarTipoCliente);
     });
     document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
+    document.getElementById("pres-cuotas").addEventListener("input", actualizarTotalPrestamo);
+    document.getElementById("pres-frecuencia").addEventListener("change", actualizarTotalPrestamo);
     document.getElementById("form-operacion").addEventListener("reset", () => {
         setTimeout(() => {
             actualizarTipoCliente();
@@ -16,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
     actualizarTipoCliente();
+    actualizarTotalPrestamo();
 });
 
 // Cabeceras globales para evitar problemas con Ngrok
@@ -98,7 +101,62 @@ function actualizarTipoCliente() {
 
 function actualizarTotalPrestamo() {
     const monto = Number(document.getElementById("pres-monto").value) || 0;
-    document.getElementById("pres-total").textContent = `$${(monto * 1.2).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+    const total = monto * 1.2;
+    const frecuencia = document.getElementById("pres-frecuencia").value;
+    const cuotas = Number(document.getElementById("pres-cuotas").value);
+    const calendario = document.getElementById("pres-calendario");
+    const fechaLimite = document.getElementById("pres-limite");
+    const formatoMoneda = valor => `$${valor.toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+
+    document.getElementById("pres-total").textContent = formatoMoneda(total);
+    if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) {
+        document.getElementById("pres-valor-cuota").textContent = "$0";
+        calendario.replaceChildren();
+        fechaLimite.value = "";
+        return;
+    }
+
+    const totalEnCentavos = Math.round(total * 100);
+    const centavosPorCuota = Math.floor(totalEnCentavos / cuotas);
+    const cuotasConCentavoExtra = totalEnCentavos % cuotas;
+    const valorCuota = (centavosPorCuota + (cuotasConCentavoExtra > 0 ? 1 : 0)) / 100;
+    document.getElementById("pres-valor-cuota").textContent = formatoMoneda(valorCuota);
+
+    const fechaInicio = new Date().toISOString().slice(0, 10);
+    const fechas = Array.from({ length: cuotas }, (_, indice) =>
+        fechaCobro(fechaInicio, frecuencia, indice + 1)
+    );
+    calendario.replaceChildren(...fechas.map((fecha, indice) => {
+        const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
+        const elemento = document.createElement("li");
+        elemento.textContent = `${fechaLegible(fecha)} — ${formatoMoneda(cuotaEnCentavos / 100)}`;
+        return elemento;
+    }));
+    fechaLimite.value = fechas[fechas.length - 1];
+}
+
+function fechaCobro(fechaInicio, frecuencia, numeroCuota) {
+    const [anio, mes, dia] = fechaInicio.split("-").map(Number);
+    const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+
+    if (frecuencia === "Mensual") {
+        const mesObjetivo = mes - 1 + numeroCuota;
+        const ultimoDia = new Date(Date.UTC(anio, mesObjetivo + 1, 0)).getUTCDate();
+        return new Date(Date.UTC(anio, mesObjetivo, Math.min(dia, ultimoDia))).toISOString().slice(0, 10);
+    }
+
+    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 14 };
+    fecha.setUTCDate(fecha.getUTCDate() + diasPorFrecuencia[frecuencia] * numeroCuota);
+    return fecha.toISOString().slice(0, 10);
+}
+
+function fechaLegible(fecha) {
+    return new Intl.DateTimeFormat("es-CO", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC"
+    }).format(new Date(`${fecha}T00:00:00Z`));
 }
 
 // Registrar el cliente (si es nuevo) y su préstamo desde un único formulario.
@@ -135,7 +193,8 @@ async function registrarOperacion(e) {
             body: JSON.stringify({
                 cliente_id: clienteId,
                 monto: document.getElementById("pres-monto").value,
-                fecha_limite: document.getElementById("pres-limite").value
+                frecuencia_pago: document.getElementById("pres-frecuencia").value,
+                numero_cuotas: document.getElementById("pres-cuotas").value
             })
         });
         const prestamoData = await prestamoRes.json();
@@ -214,13 +273,15 @@ async function cargarPrestamos() {
         tbody.innerHTML = "";
 
         if (prestamos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">No hay préstamos activos.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">No hay préstamos activos.</td></tr>`;
             return;
         }
 
         prestamos.forEach(p => {
             const estadoColor = p.estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
             const saldoActual = Number(p.saldo_actual || 0);
+            const numeroCuotas = Number(p.numero_cuotas || 1);
+            const valorCuota = Number(p.total) / numeroCuotas;
 
             tbody.innerHTML += `
                 <tr class="border-b hover:bg-gray-50 text-sm">
@@ -228,6 +289,10 @@ async function cargarPrestamos() {
                     <td class="p-3">$${Number(p.monto).toLocaleString()}</td>
                     <td class="p-3 font-semibold text-gray-700">$${saldoActual.toLocaleString()}</td>
                     <td class="p-3 font-bold">$${Number(p.total).toLocaleString()}</td>
+                    <td class="p-3">
+                        <span class="block font-semibold">${p.frecuencia_pago || 'Sin definir'}</span>
+                        <span class="text-xs text-gray-500">${numeroCuotas} cuota${numeroCuotas === 1 ? '' : 's'} · $${valorCuota.toLocaleString('es-CO', { maximumFractionDigits: 2 })} c/u</span>
+                    </td>
                     <td class="p-3">${p.fecha_limite || 'Sin fecha'}</td>
                     <td class="p-3">
                         <span class="px-2 py-1 rounded-full text-xs font-semibold ${estadoColor}">

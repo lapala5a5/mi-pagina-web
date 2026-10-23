@@ -55,6 +55,8 @@ db.exec(`
         saldo_actual REAL NOT NULL DEFAULT 0,
         fecha_prestamo TEXT NOT NULL,
         fecha_limite TEXT,
+        frecuencia_pago TEXT NOT NULL DEFAULT 'Sin definir',
+        numero_cuotas INTEGER NOT NULL DEFAULT 1,
         estado TEXT CHECK(estado IN ('Pendiente', 'Pagado')) NOT NULL,
         fecha_actualizacion TEXT,
         FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
@@ -77,6 +79,14 @@ if (!tableHasColumn("prestamos", "saldo_actual")) {
 
 if (!tableHasColumn("prestamos", "fecha_actualizacion")) {
     db.exec("ALTER TABLE prestamos ADD COLUMN fecha_actualizacion TEXT");
+}
+
+if (!tableHasColumn("prestamos", "frecuencia_pago")) {
+    db.exec("ALTER TABLE prestamos ADD COLUMN frecuencia_pago TEXT NOT NULL DEFAULT 'Sin definir'");
+}
+
+if (!tableHasColumn("prestamos", "numero_cuotas")) {
+    db.exec("ALTER TABLE prestamos ADD COLUMN numero_cuotas INTEGER NOT NULL DEFAULT 1");
 }
 
 db.prepare("UPDATE prestamos SET saldo_actual = CASE WHEN estado = 'Pagado' THEN 0 ELSE total END WHERE saldo_actual IS NULL OR saldo_actual = 0").run();
@@ -153,10 +163,27 @@ app.post("/api/clientes/:id/eliminar", (req, res) => {
 });
 
 // --- RUTAS DE PRÉSTAMOS ---
+const frecuenciasPago = new Set(["Diario", "Semanal", "Quincenal", "Mensual"]);
+
+function calcularFechaCobro(fechaInicio, frecuencia, numeroCuota) {
+    const [anio, mes, dia] = fechaInicio.split("-").map(Number);
+
+    if (frecuencia === "Mensual") {
+        const mesObjetivo = mes - 1 + numeroCuota;
+        const ultimoDia = new Date(Date.UTC(anio, mesObjetivo + 1, 0)).getUTCDate();
+        return new Date(Date.UTC(anio, mesObjetivo, Math.min(dia, ultimoDia))).toISOString().split("T")[0];
+    }
+
+    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 14 };
+    const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+    fecha.setUTCDate(fecha.getUTCDate() + diasPorFrecuencia[frecuencia] * numeroCuota);
+    return fecha.toISOString().split("T")[0];
+}
+
 app.get("/api/prestamos", (req, res) => {
     try {
         const prestamos = db.prepare(`
-            SELECT p.id, p.cliente_id, c.nombre AS cliente, c.telefono, p.monto, p.porcentaje, p.interes, p.total, p.saldo_actual, p.fecha_prestamo, p.fecha_limite, p.estado,
+            SELECT p.id, p.cliente_id, c.nombre AS cliente, c.telefono, p.monto, p.porcentaje, p.interes, p.total, p.saldo_actual, p.fecha_prestamo, p.fecha_limite, p.frecuencia_pago, p.numero_cuotas, p.estado,
                    (p.total - p.saldo_actual) AS pagado
             FROM prestamos p
             JOIN clientes c ON p.cliente_id = c.id
@@ -170,20 +197,38 @@ app.get("/api/prestamos", (req, res) => {
 
 app.post("/api/prestamos", (req, res) => {
     try {
-        const { cliente_id, monto, fecha_limite } = req.body;
-        if (!cliente_id || !monto) return res.status(400).json({ error: "Datos incompletos" });
+        const { cliente_id, monto, frecuencia_pago, numero_cuotas } = req.body;
+        if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
+            return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
+        }
 
         const clienteExiste = db.prepare("SELECT id FROM clientes WHERE id = ?").get(cliente_id);
         if (!clienteExiste) return res.status(404).json({ error: "Cliente no encontrado" });
 
         const montoNumber = Number(monto);
-        if (Number.isNaN(montoNumber) || montoNumber <= 0) return res.status(400).json({ error: "El monto debe ser mayor a cero" });
+        if (!Number.isFinite(montoNumber) || montoNumber <= 0) return res.status(400).json({ error: "El monto debe ser mayor a cero" });
+        if (!frecuenciasPago.has(frecuencia_pago)) {
+            return res.status(400).json({ error: "La frecuencia de pago no es válida" });
+        }
+
+        const numeroCuotas = Number(numero_cuotas);
+        if (!Number.isInteger(numeroCuotas) || numeroCuotas < 1 || numeroCuotas > 120) {
+            return res.status(400).json({ error: "El número de cuotas debe ser un entero entre 1 y 120" });
+        }
 
         const interes = montoNumber * 0.20;
         const total = montoNumber + interes;
         const fecha = new Date().toISOString().split("T")[0];
-        const resDb = db.prepare("INSERT INTO prestamos (cliente_id, monto, porcentaje, interes, total, saldo_actual, fecha_prestamo, fecha_limite, estado, fecha_actualizacion) VALUES (?, ?, 20, ?, ?, ?, ?, ?, 'Pendiente', ?) ").run(cliente_id, montoNumber, interes, total, total, fecha, fecha_limite || "", fecha);
-        res.json({ mensaje: "Préstamo registrado", id: resDb.lastInsertRowid, total, saldo_actual: total });
+        const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
+        const resDb = db.prepare("INSERT INTO prestamos (cliente_id, monto, porcentaje, interes, total, saldo_actual, fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, estado, fecha_actualizacion) VALUES (?, ?, 20, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)").run(cliente_id, montoNumber, interes, total, total, fecha, fechaLimite, frecuencia_pago, numeroCuotas, fecha);
+        res.json({
+            mensaje: "Préstamo registrado",
+            id: resDb.lastInsertRowid,
+            total,
+            saldo_actual: total,
+            valor_cuota: total / numeroCuotas,
+            fecha_limite: fechaLimite
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
