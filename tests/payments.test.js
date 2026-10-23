@@ -71,7 +71,8 @@ function fechaColombia(fecha = new Date()) {
       nombre: 'Usuario de prueba',
       documento: documentoPrueba,
       telefono: '3001234567',
-      direccion: 'Calle prueba 123'
+      direccion: 'Calle prueba 123',
+      direccion_trabajo: 'Carrera 10 #20-30'
     });
 
     if (clienteRes.statusCode !== 200) {
@@ -81,6 +82,11 @@ function fechaColombia(fecha = new Date()) {
 
     const clienteBody = JSON.parse(clienteRes.body);
     const clienteId = clienteBody.id;
+    const listaClientes = await request('GET', '/api/clientes');
+    const clienteGuardado = JSON.parse(listaClientes.body).find(cliente => cliente.id === clienteId);
+    if (clienteGuardado.direccion_trabajo !== 'Carrera 10 #20-30') {
+      throw new Error(`La dirección de trabajo no se conservó: ${listaClientes.body}`);
+    }
 
     const prestamoRes = await request('POST', '/api/prestamos', {
       cliente_id: clienteId,

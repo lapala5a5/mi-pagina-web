@@ -53,6 +53,7 @@ db.exec(`
         documento TEXT UNIQUE NOT NULL,
         telefono TEXT,
         direccion TEXT,
+        direccion_trabajo TEXT,
         fecha_registro TEXT NOT NULL
     );
 
@@ -83,6 +84,10 @@ db.exec(`
         FOREIGN KEY (prestamo_id) REFERENCES prestamos(id) ON DELETE CASCADE
     );
 `);
+
+if (!tableHasColumn("clientes", "direccion_trabajo")) {
+    db.exec("ALTER TABLE clientes ADD COLUMN direccion_trabajo TEXT");
+}
 
 if (!tableHasColumn("prestamos", "saldo_actual")) {
     db.exec("ALTER TABLE prestamos ADD COLUMN saldo_actual REAL NOT NULL DEFAULT 0");
@@ -138,10 +143,10 @@ app.get("/api/clientes", (req, res) => {
 
 app.post("/api/clientes", (req, res) => {
     try {
-        const { nombre, documento, telefono, direccion } = req.body;
+        const { nombre, documento, telefono, direccion, direccion_trabajo } = req.body;
         if (!nombre || !documento) return res.status(400).json({ error: "Nombre y documento requeridos" });
         const fecha = fechaHoyColombia();
-        const resDb = db.prepare("INSERT INTO clientes (nombre, documento, telefono, direccion, fecha_registro) VALUES (?, ?, ?, ?, ?)").run(nombre, documento, telefono || "", direccion || "", fecha);
+        const resDb = db.prepare("INSERT INTO clientes (nombre, documento, telefono, direccion, direccion_trabajo, fecha_registro) VALUES (?, ?, ?, ?, ?, ?)").run(nombre, documento, telefono || "", direccion || "", direccion_trabajo || "", fecha);
         res.json({ mensaje: "Cliente registrado", id: resDb.lastInsertRowid });
     } catch (error) {
         res.status(500).json({ error: error.message });

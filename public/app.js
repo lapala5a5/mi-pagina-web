@@ -64,7 +64,7 @@ async function cargarClientes() {
         if (tbody) {
             tbody.innerHTML = "";
             if (clientes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">No hay clientes registrados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No hay clientes registrados.</td></tr>`;
                 return;
             }
 
@@ -74,6 +74,7 @@ async function cargarClientes() {
                         <td class="p-3 font-medium">${c.nombre}</td>
                         <td class="p-3">${c.documento}</td>
                         <td class="p-3">${c.telefono || 'N/A'}</td>
+                        <td class="p-3">${c.direccion_trabajo || 'N/A'}</td>
                         <td class="p-3">
                             <button onclick="eliminarCliente(${c.id}, '${c.nombre}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 font-semibold transition">
                                 Eliminar Cliente
@@ -213,7 +214,8 @@ async function registrarOperacion(e) {
                     nombre: document.getElementById("cli-nombre").value.trim(),
                     documento: document.getElementById("cli-documento").value.trim(),
                     telefono: document.getElementById("cli-telefono").value.trim(),
-                    direccion: document.getElementById("cli-direccion").value.trim()
+                    direccion: document.getElementById("cli-direccion").value.trim(),
+                    direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
                 })
             });
             const clienteData = await clienteRes.json();
