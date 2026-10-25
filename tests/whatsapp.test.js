@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 const contexto = {
     document: { addEventListener() {} },
+    URLSearchParams,
     window: {}
 };
 const codigoApp = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
@@ -40,6 +41,13 @@ assert.match(mensaje, /Frecuencia de pago: Mensual/);
 assert.match(mensaje, /Número de cuotas: 4/);
 assert.match(mensaje, /Valor por cuota: \$30\.000/);
 assert.match(mensaje, /Fecha de la última cuota: 2026-12-24/);
+const enlaceCalendario = mensaje.match(/https:\/\/calendar\.google\.com\/calendar\/render\?\S+/)?.[0];
+assert.ok(enlaceCalendario, "El mensaje debe incluir un enlace para agregar el vencimiento al calendario.");
+const calendario = new URL(enlaceCalendario);
+assert.equal(calendario.searchParams.get("action"), "TEMPLATE");
+assert.equal(calendario.searchParams.get("dates"), "20261224/20261225");
+assert.match(calendario.searchParams.get("text"), /Ana Pérez/);
+assert.match(calendario.searchParams.get("details"), /Configura una notificación/);
 assert.equal(url.includes("token"), false);
 
 console.log("El enlace prepara los datos del cliente para enviarlos por WhatsApp.");

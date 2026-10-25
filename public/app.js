@@ -212,10 +212,44 @@ function obtenerDatosPrestamoFormulario() {
     };
 }
 
+function crearEnlaceCalendario(cliente, prestamo) {
+    const fecha = prestamo.fechaLimite;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return "";
+    }
+
+    const fechaInicio = new Date(`${fecha}T00:00:00Z`);
+    if (Number.isNaN(fechaInicio.getTime()) || fechaInicio.toISOString().slice(0, 10) !== fecha) {
+        return "";
+    }
+
+    const fechaFin = new Date(fechaInicio);
+    fechaFin.setUTCDate(fechaFin.getUTCDate() + 1);
+    const fechaCalendario = valor => valor.toISOString().slice(0, 10).replace(/-/g, "");
+    const nombre = String(cliente.nombre || "").trim() || "Cliente";
+    const moneda = cantidad => `$${Number(cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+    const monto = Number(prestamo.monto) || 0;
+    const parametros = new URLSearchParams({
+        action: "TEMPLATE",
+        text: `Vencimiento de préstamo - ${nombre}`,
+        dates: `${fechaCalendario(fechaInicio)}/${fechaCalendario(fechaFin)}`,
+        details: [
+            `Cliente: ${nombre}`,
+            `Monto: ${moneda(monto)}`,
+            `Total a pagar: ${moneda(monto * 1.2)}`,
+            `Frecuencia: ${prestamo.frecuencia || "No registrada"}`,
+            "Configura una notificación antes de guardar el evento."
+        ].join("\n")
+    });
+
+    return `https://calendar.google.com/calendar/render?${parametros.toString()}`;
+}
+
 function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormulario()) {
     const valor = texto => String(texto || "").trim() || "No registrado";
     const monto = Number(prestamo.monto) || 0;
     const moneda = cantidad => `$${Number(cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+    const enlaceCalendario = crearEnlaceCalendario(cliente, prestamo);
     const mensaje = [
         "Información de cliente y préstamo:",
         `Nombre: ${valor(cliente.nombre)}`,
@@ -230,7 +264,12 @@ function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormu
         `Frecuencia de pago: ${valor(prestamo.frecuencia)}`,
         `Número de cuotas: ${valor(prestamo.cuotas)}`,
         `Valor por cuota: ${valor(prestamo.valorCuota)}`,
-        `Fecha de la última cuota: ${valor(prestamo.fechaLimite)}`
+        `Fecha de la última cuota: ${valor(prestamo.fechaLimite)}`,
+        ...(enlaceCalendario ? [
+            "",
+            "Para poner una alarma, abre este enlace, agrega el evento al calendario y configura una notificación:",
+            enlaceCalendario
+        ] : [])
     ].join("\n");
 
     return `https://wa.me/573147794691?text=${encodeURIComponent(mensaje)}`;
