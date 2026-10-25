@@ -55,7 +55,15 @@ function fechaColombia(fecha = new Date()) {
 
   const server = spawn(process.execPath, [path.join(projectDir, 'server.js')], {
     cwd: tempDir,
-    env: { ...process.env, PORT: String(PORT) },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      WHATSAPP_ACCESS_TOKEN: '',
+      WHATSAPP_PHONE_NUMBER_ID: '',
+      WHATSAPP_ALERT_TO: '',
+      WHATSAPP_TEMPLATE_NAME: '',
+      WHATSAPP_TEMPLATE_LANGUAGE: ''
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -95,7 +103,7 @@ function fechaColombia(fecha = new Date()) {
       numero_cuotas: 4
     });
 
-    if (prestamoRes.statusCode !== 200) {
+    if (prestamoRes.statusCode !== 201) {
       console.error('No se pudo crear el préstamo de prueba:', prestamoRes.statusCode, prestamoRes.body);
       process.exit(1);
     }

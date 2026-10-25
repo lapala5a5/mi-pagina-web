@@ -1,6 +1,6 @@
-const express = require("express");
-const Database = require("better-sqlite3");
-const path = require("path");
+const express = require('express');
+const Database = require('better-sqlite3');
+const path = require('path');
 
 const app = express();
 const db = new Database("prestamos.db");
@@ -8,7 +8,7 @@ const db = new Database("prestamos.db");
 // Habilitar claves foráneas para borrado en cascada
 db.pragma("foreign_keys = ON");
 
-// Logger de consola para monitorear solicitudes de Ngrok
+// Logger de consola para monitorear solicitudes
 app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
     next();
@@ -44,7 +44,6 @@ function tableHasColumn(tableName, columnName) {
     const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
     return columns.some(column => column.name === columnName);
 }
-
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS clientes (
@@ -106,30 +105,6 @@ if (!tableHasColumn("prestamos", "numero_cuotas")) {
 }
 
 db.prepare("UPDATE prestamos SET saldo_actual = CASE WHEN estado = 'Pagado' THEN 0 ELSE total END WHERE saldo_actual IS NULL OR saldo_actual = 0").run();
-
-if (!tableHasColumn("pagos", "prestamo_id")) {
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS pagos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prestamo_id INTEGER NOT NULL,
-            monto REAL NOT NULL,
-            fecha_pago TEXT NOT NULL,
-            metodo_pago TEXT NOT NULL DEFAULT 'efectivo',
-            observacion TEXT DEFAULT '',
-            FOREIGN KEY (prestamo_id) REFERENCES prestamos(id) ON DELETE CASCADE
-        );
-    `);
-}
-
-
-const actualizarEstadoPrestamo = (prestamoId) => {
-    const prestamo = db.prepare("SELECT total, saldo_actual FROM prestamos WHERE id = ?").get(prestamoId);
-    if (!prestamo) return;
-
-    const saldo = Number(prestamo.saldo_actual || 0);
-    const estado = saldo <= 0 ? "Pagado" : "Pendiente";
-    db.prepare("UPDATE prestamos SET estado = ?, fecha_actualizacion = ? WHERE id = ?").run(estado, fechaHoyColombia(), prestamoId);
-};
 
 // --- RUTAS DE CLIENTES ---
 app.get("/api/clientes", (req, res) => {
@@ -211,15 +186,16 @@ app.get("/api/prestamos", (req, res) => {
     }
 });
 
-app.post("/api/prestamos", (req, res) => {
+// RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
+app.post("/api/prestamos", async (req, res) => {
     try {
         const { cliente_id, monto, frecuencia_pago, numero_cuotas } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
 
-        const clienteExiste = db.prepare("SELECT id FROM clientes WHERE id = ?").get(cliente_id);
-        if (!clienteExiste) return res.status(404).json({ error: "Cliente no encontrado" });
+        const cliente = db.prepare("SELECT nombre, telefono FROM clientes WHERE id = ?").get(cliente_id);
+        if (!cliente) return res.status(404).json({ error: "Cliente no encontrado" });
 
         const montoNumber = Number(monto);
         if (!Number.isFinite(montoNumber) || montoNumber <= 0) return res.status(400).json({ error: "El monto debe ser mayor a cero" });
@@ -236,8 +212,28 @@ app.post("/api/prestamos", (req, res) => {
         const total = montoNumber + interes;
         const fecha = fechaHoyColombia();
         const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
-        const resDb = db.prepare("INSERT INTO prestamos (cliente_id, monto, porcentaje, interes, total, saldo_actual, fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, estado, fecha_actualizacion) VALUES (?, ?, 20, ?, ?, ?, ?, ?, ?, ?, 'Pendiente', ?)").run(cliente_id, montoNumber, interes, total, total, fecha, fechaLimite, frecuencia_pago, numeroCuotas, fecha);
-        res.json({
+
+        // 1. Guardar en SQLite
+        const resDb = db.prepare(`
+            INSERT INTO prestamos (
+                cliente_id, monto, porcentaje, interes, total, saldo_actual,
+                fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, estado
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            cliente_id,
+            montoNumber,
+            20,
+            interes,
+            total,
+            total,
+            fecha,
+            fechaLimite,
+            frecuencia_pago,
+            numeroCuotas,
+            "Pendiente"
+        );
+
+        res.status(201).json({
             mensaje: "Préstamo registrado",
             id: resDb.lastInsertRowid,
             total,
@@ -345,8 +341,7 @@ app.get("/api/resumen", (req, res) => {
     }
 });
 
-// ESCUCHAR EN 0.0.0.0
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Servidor listo en http://localhost:${PORT}`);
+    console.log(`Servidor listo en http://localhost:${PORT}`);
 });

@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
     cargarResumen();
 
     document.getElementById("form-operacion").addEventListener("submit", registrarOperacion);
+    document.getElementById("enviar-whatsapp").addEventListener("click", enviarDatosWhatsApp);
     document.querySelectorAll('input[name="tipo-cliente"]').forEach(opcion => {
         opcion.addEventListener("change", actualizarTipoCliente);
     });
@@ -32,6 +33,8 @@ const HEADERS_BASE = {
     "ngrok-skip-browser-warning": "true"
 };
 
+let clientesCargados = [];
+
 // --- CLIENTES ---
 
 // 1. Obtener y mostrar clientes
@@ -39,6 +42,7 @@ async function cargarClientes() {
     try {
         const res = await fetch("/api/clientes", { headers: HEADERS_BASE });
         const clientes = await res.json();
+        clientesCargados = clientes;
 
         // Actualizar selector de cliente en el formulario unificado
         const select = document.getElementById("pres-cliente");
@@ -198,25 +202,91 @@ function fechaLegible(fecha) {
     }).format(new Date(`${fecha}T00:00:00Z`));
 }
 
+function obtenerDatosPrestamoFormulario() {
+    return {
+        monto: document.getElementById("pres-monto").value,
+        frecuencia: document.getElementById("pres-frecuencia").value,
+        cuotas: document.getElementById("pres-cuotas").value,
+        valorCuota: document.getElementById("pres-valor-cuota").textContent,
+        fechaLimite: document.getElementById("pres-limite").value
+    };
+}
+
+function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormulario()) {
+    const valor = texto => String(texto || "").trim() || "No registrado";
+    const monto = Number(prestamo.monto) || 0;
+    const moneda = cantidad => `$${Number(cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+    const mensaje = [
+        "Información de cliente y préstamo:",
+        `Nombre: ${valor(cliente.nombre)}`,
+        `Documento: ${valor(cliente.documento)}`,
+        `Teléfono: ${valor(cliente.telefono)}`,
+        `Dirección: ${valor(cliente.direccion)}`,
+        `Dirección de trabajo: ${valor(cliente.direccion_trabajo)}`,
+        "",
+        `Monto del préstamo: ${moneda(monto)}`,
+        `Interés (20%): ${moneda(monto * 0.2)}`,
+        `Total a pagar: ${moneda(monto * 1.2)}`,
+        `Frecuencia de pago: ${valor(prestamo.frecuencia)}`,
+        `Número de cuotas: ${valor(prestamo.cuotas)}`,
+        `Valor por cuota: ${valor(prestamo.valorCuota)}`,
+        `Fecha de la última cuota: ${valor(prestamo.fechaLimite)}`
+    ].join("\n");
+
+    return `https://wa.me/573147794691?text=${encodeURIComponent(mensaje)}`;
+}
+
+function mostrarAlertaWhatsApp(url) {
+    const enlace = document.getElementById("whatsapp-alerta-enlace");
+    enlace.href = url;
+    enlace.textContent = "Si no se abrió WhatsApp, pulsa aquí para compartir los datos.";
+    document.getElementById("whatsapp-alerta").classList.remove("hidden");
+}
+
+function enviarDatosWhatsApp() {
+    const formulario = document.getElementById("form-operacion");
+    if (!formulario.reportValidity()) return;
+
+    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
+    const cliente = esNuevo
+        ? {
+            nombre: document.getElementById("cli-nombre").value.trim(),
+            documento: document.getElementById("cli-documento").value.trim(),
+            telefono: document.getElementById("cli-telefono").value.trim(),
+            direccion: document.getElementById("cli-direccion").value.trim(),
+            direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
+        }
+        : clientesCargados.find(c => String(c.id) === document.getElementById("pres-cliente").value);
+
+    if (!cliente) {
+        alert("Selecciona un cliente registrado o completa los datos del nuevo cliente.");
+        return;
+    }
+
+    const url = crearEnlaceAlertaWhatsApp(cliente);
+    window.open(url, "_blank", "noopener,noreferrer");
+    mostrarAlertaWhatsApp(url);
+}
+
 // Registrar el cliente (si es nuevo) y su préstamo desde un único formulario.
 async function registrarOperacion(e) {
     e.preventDefault();
     const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
     let clienteId = document.getElementById("pres-cliente").value;
     let clienteCreado = false;
-
     try {
         if (esNuevo) {
+            const datosCliente = {
+                nombre: document.getElementById("cli-nombre").value.trim(),
+                documento: document.getElementById("cli-documento").value.trim(),
+                telefono: document.getElementById("cli-telefono").value.trim(),
+                direccion: document.getElementById("cli-direccion").value.trim(),
+                direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
+            };
             const clienteRes = await fetch("/api/clientes", {
                 method: "POST",
                 headers: HEADERS_BASE,
-                body: JSON.stringify({
-                    nombre: document.getElementById("cli-nombre").value.trim(),
-                    documento: document.getElementById("cli-documento").value.trim(),
-                    telefono: document.getElementById("cli-telefono").value.trim(),
-                    direccion: document.getElementById("cli-direccion").value.trim(),
-                    direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
-                })
+                body: JSON.stringify(datosCliente)
             });
             const clienteData = await clienteRes.json();
             if (!clienteRes.ok) {
@@ -242,7 +312,7 @@ async function registrarOperacion(e) {
         if (!prestamoRes.ok) {
             if (clienteCreado) {
                 await cargarClientes();
-                alert(`El cliente quedó registrado, pero no se pudo crear el préstamo: ${prestamoData.error || "Error desconocido"}`);
+                alert(`El cliente quedó registrado, pero no se pudo crear el préstamo: ${prestamoData.error || "Error desconocido"}. Revisa WhatsApp y pulsa Enviar para mandar la alerta.`);
             } else {
                 alert("No se pudo crear el préstamo: " + (prestamoData.error || "Error desconocido"));
             }
@@ -251,7 +321,10 @@ async function registrarOperacion(e) {
 
         document.getElementById("form-operacion").reset();
         await Promise.all([cargarClientes(), cargarPrestamos(), cargarResumen()]);
-        alert(clienteCreado ? "Cliente y préstamo registrados correctamente" : "Préstamo registrado correctamente");
+        const mensajeRegistro = clienteCreado
+            ? "Cliente y préstamo registrados correctamente. Usa el botón de WhatsApp si también quieres compartir los datos."
+            : "Préstamo registrado correctamente.";
+        alert(mensajeRegistro);
     } catch (error) {
         console.error("Error al registrar cliente y préstamo:", error);
         if (clienteCreado) {
