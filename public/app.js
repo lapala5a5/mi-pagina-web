@@ -275,10 +275,13 @@ function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormu
     return `https://wa.me/573147794691?text=${encodeURIComponent(mensaje)}`;
 }
 
-function mostrarAlertaWhatsApp(url) {
+function mostrarAlertaWhatsApp(url, calendarioUrl) {
     const enlace = document.getElementById("whatsapp-alerta-enlace");
     enlace.href = url;
     enlace.textContent = "Si no se abrió WhatsApp, pulsa aquí para compartir los datos.";
+    const enlaceCalendario = document.getElementById("calendario-alerta-enlace");
+    enlaceCalendario.href = calendarioUrl;
+    enlaceCalendario.classList.toggle("hidden", !calendarioUrl);
     document.getElementById("whatsapp-alerta").classList.remove("hidden");
 }
 
@@ -302,9 +305,11 @@ function enviarDatosWhatsApp() {
         return;
     }
 
-    const url = crearEnlaceAlertaWhatsApp(cliente);
+    const prestamo = obtenerDatosPrestamoFormulario();
+    const url = crearEnlaceAlertaWhatsApp(cliente, prestamo);
+    const calendarioUrl = crearEnlaceCalendario(cliente, prestamo);
     window.open(url, "_blank", "noopener,noreferrer");
-    mostrarAlertaWhatsApp(url);
+    mostrarAlertaWhatsApp(url, calendarioUrl);
 }
 
 // Registrar el cliente (si es nuevo) y su préstamo desde un único formulario.

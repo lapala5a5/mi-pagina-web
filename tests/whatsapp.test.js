@@ -48,6 +48,8 @@ assert.equal(calendario.searchParams.get("action"), "TEMPLATE");
 assert.equal(calendario.searchParams.get("dates"), "20261224/20261225");
 assert.match(calendario.searchParams.get("text"), /Ana Pérez/);
 assert.match(calendario.searchParams.get("details"), /Configura una notificación/);
+const sinFecha = contexto.crearEnlaceCalendario({ nombre: "Ana Pérez" }, { fechaLimite: "" });
+assert.equal(sinFecha, "", "No se debe crear un enlace de alarma si falta una fecha válida.");
 assert.equal(url.includes("token"), false);
 
 console.log("El enlace prepara los datos del cliente para enviarlos por WhatsApp.");
