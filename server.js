@@ -189,7 +189,7 @@ app.get("/api/prestamos", (req, res) => {
 // RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
 app.post("/api/prestamos", async (req, res) => {
     try {
-        const { cliente_id, monto, frecuencia_pago, numero_cuotas, fecha_limite } = req.body;
+        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas, fecha_limite } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
@@ -199,6 +199,10 @@ app.post("/api/prestamos", async (req, res) => {
 
         const montoNumber = Number(monto);
         if (!Number.isFinite(montoNumber) || montoNumber <= 0) return res.status(400).json({ error: "El monto debe ser mayor a cero" });
+        const porcentajeNumber = Number(porcentaje);
+        if (!Number.isInteger(porcentajeNumber) || porcentajeNumber < 10 || porcentajeNumber > 100) {
+            return res.status(400).json({ error: "El porcentaje de interés debe ser un entero entre 10 y 100" });
+        }
         if (!frecuenciasPago.has(frecuencia_pago)) {
             return res.status(400).json({ error: "La frecuencia de pago no es válida" });
         }
@@ -208,7 +212,7 @@ app.post("/api/prestamos", async (req, res) => {
             return res.status(400).json({ error: "El número de cuotas debe ser un entero entre 1 y 120" });
         }
 
-        const interes = montoNumber * 0.20;
+        const interes = montoNumber * porcentajeNumber / 100;
         const total = montoNumber + interes;
         const fecha = fechaHoyColombia();
         const fechaLimite = fecha_limite === undefined
@@ -233,7 +237,7 @@ app.post("/api/prestamos", async (req, res) => {
         `).run(
             cliente_id,
             montoNumber,
-            20,
+            porcentajeNumber,
             interes,
             total,
             total,
@@ -247,6 +251,7 @@ app.post("/api/prestamos", async (req, res) => {
         res.status(201).json({
             mensaje: "Préstamo registrado",
             id: resDb.lastInsertRowid,
+            porcentaje: porcentajeNumber,
             total,
             saldo_actual: total,
             valor_cuota: total / numeroCuotas,

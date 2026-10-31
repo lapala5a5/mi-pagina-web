@@ -147,6 +147,28 @@ function fechaColombia(fecha = new Date()) {
       throw new Error(`No se guardó la fecha de última cuota elegida: ${prestamoConFechaElegida.body}`);
     }
 
+    const prestamoConInteresPersonalizado = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      porcentaje: 50,
+      frecuencia_pago: 'Mensual',
+      numero_cuotas: 2,
+      fecha_limite: fechaLimiteElegida
+    });
+    const interesPersonalizado = JSON.parse(prestamoConInteresPersonalizado.body);
+    if (prestamoConInteresPersonalizado.statusCode !== 201
+      || interesPersonalizado.porcentaje !== 50
+      || interesPersonalizado.total !== 1500
+      || interesPersonalizado.saldo_actual !== 1500) {
+      throw new Error(`No se aplicó correctamente el porcentaje de interés elegido: ${prestamoConInteresPersonalizado.body}`);
+    }
+    const prestamosConInteresPersonalizado = await request('GET', '/api/prestamos');
+    const prestamoPersonalizadoGuardado = JSON.parse(prestamosConInteresPersonalizado.body)
+      .find(prestamo => prestamo.id === interesPersonalizado.id);
+    if (prestamoPersonalizadoGuardado.porcentaje !== 50 || prestamoPersonalizadoGuardado.interes !== 500) {
+      throw new Error(`No se guardó el interés personalizado: ${prestamosConInteresPersonalizado.body}`);
+    }
+
     const prestamoConFechaInvalida = await request('POST', '/api/prestamos', {
       cliente_id: clienteId,
       monto: 1000,
@@ -156,6 +178,17 @@ function fechaColombia(fecha = new Date()) {
     });
     if (prestamoConFechaInvalida.statusCode !== 400) {
       throw new Error(`Se esperaba rechazar una fecha de última cuota inválida: ${prestamoConFechaInvalida.body}`);
+    }
+
+    const interesFueraDeRango = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      porcentaje: 101,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 4
+    });
+    if (interesFueraDeRango.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar un porcentaje superior a 100: ${interesFueraDeRango.body}`);
     }
 
     const pagoRes = await request('POST', '/api/pagos', {

@@ -10,9 +10,11 @@ document.addEventListener("DOMContentLoaded", () => {
         opcion.addEventListener("change", actualizarTipoCliente);
     });
     document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
+    document.getElementById("pres-porcentaje").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-cuotas").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarTotalPrestamo);
     document.getElementById("pres-limite").addEventListener("input", actualizarTotalPrestamo);
+    document.getElementById("pres-limite").addEventListener("change", actualizarTotalPrestamo);
     document.getElementById("form-operacion").addEventListener("reset", () => {
         setTimeout(() => {
             actualizarTipoCliente();
@@ -112,7 +114,10 @@ function actualizarTipoCliente() {
 
 function actualizarTotalPrestamo() {
     const monto = Number(document.getElementById("pres-monto").value) || 0;
-    const total = monto * 1.2;
+    const campoPorcentaje = document.getElementById("pres-porcentaje");
+    const porcentaje = Number(campoPorcentaje.value);
+    const porcentajeValido = Number.isInteger(porcentaje) && porcentaje >= 10 && porcentaje <= 100;
+    const total = monto * (1 + (porcentajeValido ? porcentaje : 0) / 100);
     const frecuencia = document.getElementById("pres-frecuencia").value;
     const cuotas = Number(document.getElementById("pres-cuotas").value);
     const calendario = document.getElementById("pres-calendario");
@@ -120,6 +125,7 @@ function actualizarTotalPrestamo() {
     const formatoMoneda = valor => `$${valor.toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
 
     document.getElementById("pres-total").textContent = formatoMoneda(total);
+    document.getElementById("pres-porcentaje-etiqueta").textContent = porcentajeValido ? porcentaje : "—";
     if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) {
         document.getElementById("pres-valor-cuota").textContent = "$0";
         calendario.replaceChildren();
@@ -207,6 +213,7 @@ function fechaLegible(fecha) {
 function obtenerDatosPrestamoFormulario() {
     return {
         monto: document.getElementById("pres-monto").value,
+        porcentaje: document.getElementById("pres-porcentaje").value,
         frecuencia: document.getElementById("pres-frecuencia").value,
         cuotas: document.getElementById("pres-cuotas").value,
         valorCuota: document.getElementById("pres-valor-cuota").textContent,
@@ -238,7 +245,7 @@ function crearEnlaceCalendario(cliente, prestamo) {
         details: [
             `Cliente: ${nombre}`,
             `Monto: ${moneda(monto)}`,
-            `Total a pagar: ${moneda(monto * 1.2)}`,
+            `Total a pagar: ${moneda(monto * (1 + (Number(prestamo.porcentaje) || 20) / 100))}`,
             `Frecuencia: ${prestamo.frecuencia || "No registrada"}`,
             "Configura una notificación antes de guardar el evento."
         ].join("\n")
@@ -250,6 +257,7 @@ function crearEnlaceCalendario(cliente, prestamo) {
 function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormulario()) {
     const valor = texto => String(texto || "").trim() || "No registrado";
     const monto = Number(prestamo.monto) || 0;
+    const porcentaje = Number(prestamo.porcentaje) || 20;
     const moneda = cantidad => `$${Number(cantidad).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
     const enlaceCalendario = crearEnlaceCalendario(cliente, prestamo);
     const mensaje = [
@@ -261,8 +269,8 @@ function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormu
         `Dirección de trabajo: ${valor(cliente.direccion_trabajo)}`,
         "",
         `Monto del préstamo: ${moneda(monto)}`,
-        `Interés (20%): ${moneda(monto * 0.2)}`,
-        `Total a pagar: ${moneda(monto * 1.2)}`,
+        `Interés (${porcentaje}%): ${moneda(monto * porcentaje / 100)}`,
+        `Total a pagar: ${moneda(monto * (1 + porcentaje / 100))}`,
         `Frecuencia de pago: ${valor(prestamo.frecuencia)}`,
         `Número de cuotas: ${valor(prestamo.cuotas)}`,
         `Valor por cuota: ${valor(prestamo.valorCuota)}`,
@@ -349,6 +357,7 @@ async function registrarOperacion(e) {
             body: JSON.stringify({
                 cliente_id: clienteId,
                 monto: document.getElementById("pres-monto").value,
+                porcentaje: document.getElementById("pres-porcentaje").value,
                 frecuencia_pago: document.getElementById("pres-frecuencia").value,
                 numero_cuotas: document.getElementById("pres-cuotas").value,
                 fecha_limite: document.getElementById("pres-limite").value
@@ -448,7 +457,10 @@ async function cargarPrestamos() {
                     <td class="p-3 font-medium">${p.cliente}</td>
                     <td class="p-3">$${Number(p.monto).toLocaleString()}</td>
                     <td class="p-3 font-semibold text-gray-700">$${saldoActual.toLocaleString()}</td>
-                    <td class="p-3 font-bold">$${Number(p.total).toLocaleString()}</td>
+                    <td class="p-3 font-bold">
+                        $${Number(p.total).toLocaleString()}
+                        <span class="block text-xs font-normal text-gray-500">${Number(p.porcentaje)}% de interés</span>
+                    </td>
                     <td class="p-3">
                         <span class="block font-semibold">${p.frecuencia_pago || 'Sin definir'}</span>
                         <span class="text-xs text-gray-500">${numeroCuotas} cuota${numeroCuotas === 1 ? '' : 's'} · $${valorCuota.toLocaleString('es-CO', { maximumFractionDigits: 2 })} c/u</span>

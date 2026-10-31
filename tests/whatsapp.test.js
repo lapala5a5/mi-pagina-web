@@ -19,6 +19,7 @@ const url = contexto.crearEnlaceAlertaWhatsApp({
     direccion_trabajo: "Carrera 10"
 }, {
     monto: "100000",
+    porcentaje: "50",
     frecuencia: "Mensual",
     cuotas: "4",
     valorCuota: "$30.000",
@@ -35,8 +36,8 @@ assert.match(mensaje, /Teléfono: 3001234567/);
 assert.match(mensaje, /Dirección: No registrado/);
 assert.match(mensaje, /Dirección de trabajo: Carrera 10/);
 assert.match(mensaje, /Monto del préstamo: \$100\.000/);
-assert.match(mensaje, /Interés \(20%\): \$20\.000/);
-assert.match(mensaje, /Total a pagar: \$120\.000/);
+assert.match(mensaje, /Interés \(50%\): \$50\.000/);
+assert.match(mensaje, /Total a pagar: \$150\.000/);
 assert.match(mensaje, /Frecuencia de pago: Mensual/);
 assert.match(mensaje, /Número de cuotas: 4/);
 assert.match(mensaje, /Valor por cuota: \$30\.000/);
@@ -47,6 +48,7 @@ const calendario = new URL(enlaceCalendario);
 assert.equal(calendario.searchParams.get("action"), "TEMPLATE");
 assert.equal(calendario.searchParams.get("dates"), "20261224/20261225");
 assert.match(calendario.searchParams.get("text"), /Ana Pérez/);
+assert.match(calendario.searchParams.get("details"), /Total a pagar: \$150\.000/);
 assert.match(calendario.searchParams.get("details"), /Configura una notificación/);
 const sinFecha = contexto.crearEnlaceCalendario({ nombre: "Ana Pérez" }, { fechaLimite: "" });
 assert.equal(sinFecha, "", "No se debe crear un enlace de alarma si falta una fecha válida.");
