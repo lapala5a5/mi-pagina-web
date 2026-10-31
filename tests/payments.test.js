@@ -3,7 +3,6 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const Database = require('better-sqlite3');
 
 const PORT = 4100;
 const projectDir = path.resolve(__dirname, '..');
@@ -81,7 +80,8 @@ function fechaColombia(fecha = new Date()) {
       documento: documentoPrueba,
       telefono: '3001234567',
       direccion: 'Calle prueba 123',
-      direccion_trabajo: 'Carrera 10 #20-30'
+      direccion_trabajo: 'Carrera 10 #20-30',
+      fecha_registro: '2026-01-31'
     });
 
     if (clienteRes.statusCode !== 200) {
@@ -93,7 +93,8 @@ function fechaColombia(fecha = new Date()) {
     const clienteId = clienteBody.id;
     const listaClientes = await request('GET', '/api/clientes');
     const clienteGuardado = JSON.parse(listaClientes.body).find(cliente => cliente.id === clienteId);
-    if (clienteGuardado.direccion_trabajo !== 'Carrera 10 #20-30') {
+    if (clienteGuardado.direccion_trabajo !== 'Carrera 10 #20-30'
+      || clienteGuardado.fecha_registro !== '2026-01-31') {
       throw new Error(`La dirección de trabajo no se conservó: ${listaClientes.body}`);
     }
 
@@ -111,10 +112,10 @@ function fechaColombia(fecha = new Date()) {
 
     const prestamoBody = JSON.parse(prestamoRes.body);
     const prestamoId = prestamoBody.id;
-    const fechaEsperada = new Date(`${fechaColombia()}T00:00:00Z`);
+    const fechaEsperada = new Date('2026-01-31T00:00:00Z');
     fechaEsperada.setUTCDate(fechaEsperada.getUTCDate() + 28);
     if (prestamoBody.valor_cuota !== 300
-      || prestamoBody.fecha_prestamo !== fechaColombia()
+      || prestamoBody.fecha_prestamo !== '2026-01-31'
       || prestamoBody.fecha_limite !== fechaEsperada.toISOString().split('T')[0]) {
       throw new Error(`El resumen de cuotas no coincide con la frecuencia semanal: ${prestamoRes.body}`);
     }
@@ -136,9 +137,6 @@ function fechaColombia(fecha = new Date()) {
     }
 
     const fechaRegistroPrueba = '2026-01-31';
-    const dbPrueba = new Database(path.join(tempDir, 'prestamos.db'));
-    dbPrueba.prepare('UPDATE clientes SET fecha_registro = ? WHERE id = ?').run(fechaRegistroPrueba, clienteId);
-    dbPrueba.close();
     const prestamoDesdeRegistro = await request('POST', '/api/prestamos', {
       cliente_id: clienteId,
       monto: 1000,
@@ -160,6 +158,40 @@ function fechaColombia(fecha = new Date()) {
     if (prestamoQuincenalDesdeRegistro.statusCode !== 201
       || JSON.parse(prestamoQuincenalDesdeRegistro.body).fecha_limite !== '2026-03-02') {
       throw new Error(`La frecuencia quincenal no contó intervalos de 15 días desde el registro: ${prestamoQuincenalDesdeRegistro.body}`);
+    }
+
+    const prestamoConInicioEditado = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 2,
+      fecha_inicio: '2026-02-01'
+    });
+    const prestamoConInicioEditadoBody = JSON.parse(prestamoConInicioEditado.body);
+    if (prestamoConInicioEditado.statusCode !== 201
+      || prestamoConInicioEditadoBody.fecha_prestamo !== '2026-02-01'
+      || prestamoConInicioEditadoBody.fecha_limite !== '2026-02-15') {
+      throw new Error(`No se recalcularon las cuotas desde la fecha de inicio elegida: ${prestamoConInicioEditado.body}`);
+    }
+
+    const inicioInvalido = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 2,
+      fecha_inicio: '2026-02-30'
+    });
+    if (inicioInvalido.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar una fecha de inicio inválida: ${inicioInvalido.body}`);
+    }
+
+    const fechaRegistroInvalida = await request('POST', '/api/clientes', {
+      nombre: 'Cliente con fecha inválida',
+      documento: `doc-invalido-${Date.now()}`,
+      fecha_registro: '2026-02-30'
+    });
+    if (fechaRegistroInvalida.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar una fecha de registro inválida: ${fechaRegistroInvalida.body}`);
     }
 
     const prestamoConFechaElegida = await request('POST', '/api/prestamos', {

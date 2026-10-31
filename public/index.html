@@ -110,6 +110,11 @@
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
+              <label for="pres-fecha-inicio" class="field-label">Fecha de inicio del calendario <span class="text-rose-600">*</span></label>
+              <input type="text" id="pres-fecha-inicio" inputmode="numeric" placeholder="AAAA-MM-DD" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" required class="field-control">
+              <p class="mt-1 text-xs text-slate-500">Puedes escribir la fecha directamente, por ejemplo 2026-10-31. Al cambiarla se recalculan las cuotas.</p>
+            </div>
+            <div>
               <label for="pres-monto" class="field-label">Monto a prestar <span class="text-rose-600">*</span></label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
@@ -129,10 +134,6 @@
               <label for="pres-cuotas" class="field-label">Número de cuotas</label>
               <input type="number" id="pres-cuotas" min="1" max="120" step="1" value="1" required class="field-control">
             </div>
-            <div>
-              <label for="pres-limite" class="field-label">Última cuota (calculada desde el registro)</label>
-              <input type="date" id="pres-limite" readonly class="field-control bg-slate-50">
-            </div>
           </div>
           <div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
             <span class="text-slate-600">Total a pagar con interés (<span id="pres-porcentaje-etiqueta">20</span>%)</span>
@@ -142,7 +143,7 @@
             <p class="text-sm text-slate-700">Valor por cuota <strong id="pres-valor-cuota" class="ml-1 text-base text-slate-900">$0</strong></p>
             <div class="mt-3">
               <h4 class="text-sm font-semibold text-slate-700">Calendario de cobros</h4>
-              <p id="pres-fecha-inicio" class="mt-1 text-xs text-slate-500"></p>
+              <p id="pres-fecha-resumen" class="mt-1 text-xs text-slate-500"></p>
               <ol id="pres-calendario" class="mt-2 max-h-48 list-inside list-decimal space-y-1 overflow-y-auto text-sm text-slate-600"></ol>
             </div>
           </div>

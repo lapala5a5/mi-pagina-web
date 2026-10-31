@@ -6,9 +6,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("form-operacion").addEventListener("submit", registrarOperacion);
     document.getElementById("enviar-whatsapp").addEventListener("click", enviarDatosWhatsApp);
+    document.getElementById("pres-fecha-inicio").value = fechaHoyColombia();
+    validarFechaInicio();
+    document.getElementById("pres-fecha-inicio").addEventListener("input", () => {
+        validarFechaInicio();
+        actualizarTotalPrestamo();
+    });
     document.querySelectorAll('input[name="tipo-cliente"]').forEach(opcion => {
         opcion.addEventListener("change", () => {
             actualizarTipoCliente();
+            if (document.querySelector('input[name="tipo-cliente"]:checked').value === "existente") {
+                actualizarFechaInicioDesdeCliente();
+            }
             actualizarTotalPrestamo();
         });
     });
@@ -16,9 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("pres-porcentaje").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-cuotas").addEventListener("input", actualizarCalendarioAutomatico);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarCalendarioAutomatico);
-    document.getElementById("pres-cliente").addEventListener("change", actualizarCalendarioAutomatico);
+    document.getElementById("pres-cliente").addEventListener("change", () => {
+        actualizarFechaInicioDesdeCliente();
+        actualizarCalendarioAutomatico();
+    });
     document.getElementById("form-operacion").addEventListener("reset", () => {
         setTimeout(() => {
+            document.getElementById("pres-fecha-inicio").value = fechaHoyColombia();
+            validarFechaInicio();
             actualizarTipoCliente();
             actualizarTotalPrestamo();
             programarActualizacionMedianoche();
@@ -123,7 +137,6 @@ function actualizarTotalPrestamo() {
     const frecuencia = document.getElementById("pres-frecuencia").value;
     const cuotas = Number(document.getElementById("pres-cuotas").value);
     const calendario = document.getElementById("pres-calendario");
-    const fechaLimite = document.getElementById("pres-limite");
     const formatoMoneda = valor => `$${valor.toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
 
     document.getElementById("pres-total").textContent = formatoMoneda(total);
@@ -131,8 +144,7 @@ function actualizarTotalPrestamo() {
     if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) {
         document.getElementById("pres-valor-cuota").textContent = "$0";
         calendario.replaceChildren();
-        fechaLimite.value = "";
-        document.getElementById("pres-fecha-inicio").textContent = "";
+        document.getElementById("pres-fecha-resumen").textContent = "";
         return;
     }
 
@@ -142,14 +154,17 @@ function actualizarTotalPrestamo() {
     const valorCuota = (centavosPorCuota + (cuotasConCentavoExtra > 0 ? 1 : 0)) / 100;
     document.getElementById("pres-valor-cuota").textContent = formatoMoneda(valorCuota);
 
-    const cliente = obtenerClienteSeleccionado();
-    const fechaRegistro = cliente?.fecha_registro || fechaHoyColombia();
+    const fechaRegistro = document.getElementById("pres-fecha-inicio").value;
+    if (!validarFechaInicio()) {
+        calendario.replaceChildren();
+        document.getElementById("pres-fecha-resumen").textContent = "Escribe una fecha válida en formato AAAA-MM-DD.";
+        return;
+    }
     const fechas = Array.from({ length: cuotas }, (_, indice) =>
         fechaCobro(fechaRegistro, frecuencia, indice + 1)
     );
-    fechaLimite.value = fechas[fechas.length - 1];
-    document.getElementById("pres-fecha-inicio").textContent =
-        `Cuenta desde el registro: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechaLimite.value)}`;
+    document.getElementById("pres-fecha-resumen").textContent =
+        `Cuenta desde el registro: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechas[fechas.length - 1])}`;
     calendario.replaceChildren(...fechas.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
@@ -162,9 +177,33 @@ function actualizarCalendarioAutomatico() {
     actualizarTotalPrestamo();
 }
 
+function actualizarFechaInicioDesdeCliente() {
+    const cliente = obtenerClienteSeleccionado();
+    const campoFechaInicio = document.getElementById("pres-fecha-inicio");
+    campoFechaInicio.value = cliente?.fecha_registro || fechaHoyColombia();
+    validarFechaInicio();
+}
+
+function validarFechaInicio() {
+    const campo = document.getElementById("pres-fecha-inicio");
+    const fecha = campo.value;
+    const fechaParseada = /^\d{4}-\d{2}-\d{2}$/.test(fecha)
+        ? new Date(`${fecha}T00:00:00Z`)
+        : null;
+    const valida = Boolean(fechaParseada
+        && !Number.isNaN(fechaParseada.getTime())
+        && fechaParseada.toISOString().slice(0, 10) === fecha);
+    campo.setCustomValidity(valida ? "" : "Escribe una fecha válida en formato AAAA-MM-DD.");
+    return valida;
+}
+
 function obtenerClienteSeleccionado() {
     const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
-    if (esNuevo) return null;
+    if (esNuevo) {
+        return {
+            fecha_registro: document.getElementById("pres-fecha-inicio").value
+        };
+    }
     const clienteId = document.getElementById("pres-cliente").value;
     return clientesCargados.find(cliente => String(cliente.id) === clienteId) || null;
 }
@@ -230,8 +269,15 @@ function obtenerDatosPrestamoFormulario() {
         frecuencia: document.getElementById("pres-frecuencia").value,
         cuotas: document.getElementById("pres-cuotas").value,
         valorCuota: document.getElementById("pres-valor-cuota").textContent,
-        fechaLimite: document.getElementById("pres-limite").value
+        fechaLimite: calcularFechaLimiteFormulario()
     };
+}
+
+function calcularFechaLimiteFormulario() {
+    const cuotas = Number(document.getElementById("pres-cuotas").value);
+    if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) return "";
+    const fechaRegistro = document.getElementById("pres-fecha-inicio").value || fechaHoyColombia();
+    return fechaCobro(fechaRegistro, document.getElementById("pres-frecuencia").value, cuotas);
 }
 
 function crearEnlaceCalendario(cliente, prestamo) {
@@ -318,7 +364,8 @@ function enviarDatosWhatsApp() {
             documento: document.getElementById("cli-documento").value.trim(),
             telefono: document.getElementById("cli-telefono").value.trim(),
             direccion: document.getElementById("cli-direccion").value.trim(),
-            direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
+            direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim(),
+            fecha_registro: document.getElementById("pres-fecha-inicio").value
         }
         : obtenerClienteSeleccionado();
 
@@ -347,7 +394,8 @@ async function registrarOperacion(e) {
                 documento: document.getElementById("cli-documento").value.trim(),
                 telefono: document.getElementById("cli-telefono").value.trim(),
                 direccion: document.getElementById("cli-direccion").value.trim(),
-                direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
+                direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim(),
+                fecha_registro: document.getElementById("pres-fecha-inicio").value
             };
             const clienteRes = await fetch("/api/clientes", {
                 method: "POST",
@@ -371,7 +419,8 @@ async function registrarOperacion(e) {
                 monto: document.getElementById("pres-monto").value,
                 porcentaje: document.getElementById("pres-porcentaje").value,
                 frecuencia_pago: document.getElementById("pres-frecuencia").value,
-                numero_cuotas: document.getElementById("pres-cuotas").value
+                numero_cuotas: document.getElementById("pres-cuotas").value,
+                fecha_inicio: document.getElementById("pres-fecha-inicio").value
             })
         });
         const prestamoData = await prestamoRes.json();

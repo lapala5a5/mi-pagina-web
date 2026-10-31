@@ -118,9 +118,16 @@ app.get("/api/clientes", (req, res) => {
 
 app.post("/api/clientes", (req, res) => {
     try {
-        const { nombre, documento, telefono, direccion, direccion_trabajo } = req.body;
+        const { nombre, documento, telefono, direccion, direccion_trabajo, fecha_registro } = req.body;
         if (!nombre || !documento) return res.status(400).json({ error: "Nombre y documento requeridos" });
-        const fecha = fechaHoyColombia();
+        const fecha = fecha_registro === undefined ? fechaHoyColombia() : fecha_registro;
+        const fechaParseada = typeof fecha === "string" ? new Date(`${fecha}T00:00:00Z`) : null;
+        if (typeof fecha !== "string"
+            || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+            || Number.isNaN(fechaParseada.getTime())
+            || fechaParseada.toISOString().slice(0, 10) !== fecha) {
+            return res.status(400).json({ error: "La fecha de registro no es válida" });
+        }
         const resDb = db.prepare("INSERT INTO clientes (nombre, documento, telefono, direccion, direccion_trabajo, fecha_registro) VALUES (?, ?, ?, ?, ?, ?)").run(nombre, documento, telefono || "", direccion || "", direccion_trabajo || "", fecha);
         res.json({ mensaje: "Cliente registrado", id: resDb.lastInsertRowid });
     } catch (error) {
@@ -189,7 +196,7 @@ app.get("/api/prestamos", (req, res) => {
 // RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
 app.post("/api/prestamos", async (req, res) => {
     try {
-        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas } = req.body;
+        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas, fecha_inicio } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
@@ -214,7 +221,16 @@ app.post("/api/prestamos", async (req, res) => {
 
         const interes = montoNumber * porcentajeNumber / 100;
         const total = montoNumber + interes;
-        const fecha = cliente.fecha_registro || fechaHoyColombia();
+        const fecha = fecha_inicio === undefined
+            ? cliente.fecha_registro || fechaHoyColombia()
+            : fecha_inicio;
+        const fechaParseada = typeof fecha === "string" ? new Date(`${fecha}T00:00:00Z`) : null;
+        if (typeof fecha !== "string"
+            || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+            || Number.isNaN(fechaParseada.getTime())
+            || fechaParseada.toISOString().slice(0, 10) !== fecha) {
+            return res.status(400).json({ error: "La fecha de inicio del calendario no es válida" });
+        }
         const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
 
         // 1. Guardar en SQLite
