@@ -272,7 +272,7 @@ function crearEnlaceAlertaWhatsApp(cliente, prestamo = obtenerDatosPrestamoFormu
         ] : [])
     ].join("\n");
 
-    return `https://wa.me/573147794691?text=${encodeURIComponent(mensaje)}`;
+    return `https://wa.me/573205486261?text=${encodeURIComponent(mensaje)}`;
 }
 
 function mostrarAlertaWhatsApp(url, calendarioUrl) {

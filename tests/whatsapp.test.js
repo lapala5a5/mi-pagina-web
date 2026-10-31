@@ -28,7 +28,7 @@ const enlace = new URL(url);
 const mensaje = enlace.searchParams.get("text");
 
 assert.equal(enlace.origin, "https://wa.me");
-assert.equal(enlace.pathname, "/573147794691");
+assert.equal(enlace.pathname, "/573205486261");
 assert.match(mensaje, /Nombre: Ana Pérez/);
 assert.match(mensaje, /Documento: 123/);
 assert.match(mensaje, /Teléfono: 3001234567/);
