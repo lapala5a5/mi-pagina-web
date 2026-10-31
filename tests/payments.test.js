@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const Database = require('better-sqlite3');
 
 const PORT = 4100;
 const projectDir = path.resolve(__dirname, '..');
@@ -134,17 +135,43 @@ function fechaColombia(fecha = new Date()) {
       throw new Error(`La modalidad y el número de cuotas no se conservaron: ${listaPrestamos.body}`);
     }
 
-    const fechaLimiteElegida = '2026-12-24';
+    const fechaRegistroPrueba = '2026-01-31';
+    const dbPrueba = new Database(path.join(tempDir, 'prestamos.db'));
+    dbPrueba.prepare('UPDATE clientes SET fecha_registro = ? WHERE id = ?').run(fechaRegistroPrueba, clienteId);
+    dbPrueba.close();
+    const prestamoDesdeRegistro = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Mensual',
+      numero_cuotas: 2
+    });
+    const prestamoDesdeRegistroBody = JSON.parse(prestamoDesdeRegistro.body);
+    if (prestamoDesdeRegistro.statusCode !== 201
+      || prestamoDesdeRegistroBody.fecha_prestamo !== fechaRegistroPrueba
+      || prestamoDesdeRegistroBody.fecha_limite !== '2026-03-31') {
+      throw new Error(`El calendario no empezó desde la fecha de registro del cliente: ${prestamoDesdeRegistro.body}`);
+    }
+    const prestamoQuincenalDesdeRegistro = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Quincenal',
+      numero_cuotas: 2
+    });
+    if (prestamoQuincenalDesdeRegistro.statusCode !== 201
+      || JSON.parse(prestamoQuincenalDesdeRegistro.body).fecha_limite !== '2026-03-02') {
+      throw new Error(`La frecuencia quincenal no contó intervalos de 15 días desde el registro: ${prestamoQuincenalDesdeRegistro.body}`);
+    }
+
     const prestamoConFechaElegida = await request('POST', '/api/prestamos', {
       cliente_id: clienteId,
       monto: 1000,
       frecuencia_pago: 'Quincenal',
       numero_cuotas: 4,
-      fecha_limite: fechaLimiteElegida
+      fecha_limite: '2026-12-24'
     });
     if (prestamoConFechaElegida.statusCode !== 201
-      || JSON.parse(prestamoConFechaElegida.body).fecha_limite !== fechaLimiteElegida) {
-      throw new Error(`No se guardó la fecha de última cuota elegida: ${prestamoConFechaElegida.body}`);
+      || JSON.parse(prestamoConFechaElegida.body).fecha_limite !== '2026-04-01') {
+      throw new Error(`La fecha final debe calcularse desde el registro del cliente, no desde una fecha final enviada: ${prestamoConFechaElegida.body}`);
     }
 
     const prestamoConInteresPersonalizado = await request('POST', '/api/prestamos', {
@@ -152,8 +179,7 @@ function fechaColombia(fecha = new Date()) {
       monto: 1000,
       porcentaje: 50,
       frecuencia_pago: 'Mensual',
-      numero_cuotas: 2,
-      fecha_limite: fechaLimiteElegida
+      numero_cuotas: 2
     });
     const interesPersonalizado = JSON.parse(prestamoConInteresPersonalizado.body);
     if (prestamoConInteresPersonalizado.statusCode !== 201
@@ -167,17 +193,6 @@ function fechaColombia(fecha = new Date()) {
       .find(prestamo => prestamo.id === interesPersonalizado.id);
     if (prestamoPersonalizadoGuardado.porcentaje !== 50 || prestamoPersonalizadoGuardado.interes !== 500) {
       throw new Error(`No se guardó el interés personalizado: ${prestamosConInteresPersonalizado.body}`);
-    }
-
-    const prestamoConFechaInvalida = await request('POST', '/api/prestamos', {
-      cliente_id: clienteId,
-      monto: 1000,
-      frecuencia_pago: 'Semanal',
-      numero_cuotas: 4,
-      fecha_limite: '2026-02-30'
-    });
-    if (prestamoConFechaInvalida.statusCode !== 400) {
-      throw new Error(`Se esperaba rechazar una fecha de última cuota inválida: ${prestamoConFechaInvalida.body}`);
     }
 
     const interesFueraDeRango = await request('POST', '/api/prestamos', {

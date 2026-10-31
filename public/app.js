@@ -7,14 +7,16 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("form-operacion").addEventListener("submit", registrarOperacion);
     document.getElementById("enviar-whatsapp").addEventListener("click", enviarDatosWhatsApp);
     document.querySelectorAll('input[name="tipo-cliente"]').forEach(opcion => {
-        opcion.addEventListener("change", actualizarTipoCliente);
+        opcion.addEventListener("change", () => {
+            actualizarTipoCliente();
+            actualizarTotalPrestamo();
+        });
     });
     document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-porcentaje").addEventListener("input", actualizarTotalPrestamo);
-    document.getElementById("pres-cuotas").addEventListener("input", actualizarTotalPrestamo);
-    document.getElementById("pres-frecuencia").addEventListener("change", actualizarTotalPrestamo);
-    document.getElementById("pres-limite").addEventListener("input", actualizarTotalPrestamo);
-    document.getElementById("pres-limite").addEventListener("change", actualizarTotalPrestamo);
+    document.getElementById("pres-cuotas").addEventListener("input", actualizarCalendarioAutomatico);
+    document.getElementById("pres-frecuencia").addEventListener("change", actualizarCalendarioAutomatico);
+    document.getElementById("pres-cliente").addEventListener("change", actualizarCalendarioAutomatico);
     document.getElementById("form-operacion").addEventListener("reset", () => {
         setTimeout(() => {
             actualizarTipoCliente();
@@ -140,20 +142,31 @@ function actualizarTotalPrestamo() {
     const valorCuota = (centavosPorCuota + (cuotasConCentavoExtra > 0 ? 1 : 0)) / 100;
     document.getElementById("pres-valor-cuota").textContent = formatoMoneda(valorCuota);
 
-    if (!fechaLimite.value) {
-        fechaLimite.value = fechaCobro(fechaHoyColombia(), frecuencia, cuotas);
-    }
+    const cliente = obtenerClienteSeleccionado();
+    const fechaRegistro = cliente?.fecha_registro || fechaHoyColombia();
     const fechas = Array.from({ length: cuotas }, (_, indice) =>
-        fechaCobro(fechaLimite.value, frecuencia, indice - (cuotas - 1))
+        fechaCobro(fechaRegistro, frecuencia, indice + 1)
     );
+    fechaLimite.value = fechas[fechas.length - 1];
     document.getElementById("pres-fecha-inicio").textContent =
-        `Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechaLimite.value)}`;
+        `Cuenta desde el registro: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechaLimite.value)}`;
     calendario.replaceChildren(...fechas.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
         elemento.textContent = `${fechaLegible(fecha)} — ${formatoMoneda(cuotaEnCentavos / 100)}`;
         return elemento;
     }));
+}
+
+function actualizarCalendarioAutomatico() {
+    actualizarTotalPrestamo();
+}
+
+function obtenerClienteSeleccionado() {
+    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
+    if (esNuevo) return null;
+    const clienteId = document.getElementById("pres-cliente").value;
+    return clientesCargados.find(cliente => String(cliente.id) === clienteId) || null;
 }
 
 function fechaHoyColombia() {
@@ -196,7 +209,7 @@ function fechaCobro(fechaInicio, frecuencia, numeroCuota) {
         return new Date(Date.UTC(anio, mesObjetivo, Math.min(dia, ultimoDia))).toISOString().slice(0, 10);
     }
 
-    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 14 };
+    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 15 };
     fecha.setUTCDate(fecha.getUTCDate() + diasPorFrecuencia[frecuencia] * numeroCuota);
     return fecha.toISOString().slice(0, 10);
 }
@@ -299,8 +312,7 @@ function enviarDatosWhatsApp() {
     const formulario = document.getElementById("form-operacion");
     if (!formulario.reportValidity()) return;
 
-    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
-    const cliente = esNuevo
+    const cliente = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo"
         ? {
             nombre: document.getElementById("cli-nombre").value.trim(),
             documento: document.getElementById("cli-documento").value.trim(),
@@ -308,7 +320,7 @@ function enviarDatosWhatsApp() {
             direccion: document.getElementById("cli-direccion").value.trim(),
             direccion_trabajo: document.getElementById("cli-direccion-trabajo").value.trim()
         }
-        : clientesCargados.find(c => String(c.id) === document.getElementById("pres-cliente").value);
+        : obtenerClienteSeleccionado();
 
     if (!cliente) {
         alert("Selecciona un cliente registrado o completa los datos del nuevo cliente.");
@@ -359,8 +371,7 @@ async function registrarOperacion(e) {
                 monto: document.getElementById("pres-monto").value,
                 porcentaje: document.getElementById("pres-porcentaje").value,
                 frecuencia_pago: document.getElementById("pres-frecuencia").value,
-                numero_cuotas: document.getElementById("pres-cuotas").value,
-                fecha_limite: document.getElementById("pres-limite").value
+                numero_cuotas: document.getElementById("pres-cuotas").value
             })
         });
         const prestamoData = await prestamoRes.json();

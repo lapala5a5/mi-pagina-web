@@ -165,7 +165,7 @@ function calcularFechaCobro(fechaInicio, frecuencia, numeroCuota) {
         return new Date(Date.UTC(anio, mesObjetivo, Math.min(dia, ultimoDia))).toISOString().split("T")[0];
     }
 
-    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 14 };
+    const diasPorFrecuencia = { Diario: 1, Semanal: 7, Quincenal: 15 };
     const fecha = new Date(Date.UTC(anio, mes - 1, dia));
     fecha.setUTCDate(fecha.getUTCDate() + diasPorFrecuencia[frecuencia] * numeroCuota);
     return fecha.toISOString().split("T")[0];
@@ -189,12 +189,12 @@ app.get("/api/prestamos", (req, res) => {
 // RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
 app.post("/api/prestamos", async (req, res) => {
     try {
-        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas, fecha_limite } = req.body;
+        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
 
-        const cliente = db.prepare("SELECT nombre, telefono FROM clientes WHERE id = ?").get(cliente_id);
+        const cliente = db.prepare("SELECT nombre, telefono, fecha_registro FROM clientes WHERE id = ?").get(cliente_id);
         if (!cliente) return res.status(404).json({ error: "Cliente no encontrado" });
 
         const montoNumber = Number(monto);
@@ -214,19 +214,8 @@ app.post("/api/prestamos", async (req, res) => {
 
         const interes = montoNumber * porcentajeNumber / 100;
         const total = montoNumber + interes;
-        const fecha = fechaHoyColombia();
-        const fechaLimite = fecha_limite === undefined
-            ? calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas)
-            : fecha_limite;
-        const fechaLimiteParseada = typeof fechaLimite === "string"
-            ? new Date(`${fechaLimite}T00:00:00Z`)
-            : null;
-        if (typeof fechaLimite !== "string"
-            || !/^\d{4}-\d{2}-\d{2}$/.test(fechaLimite)
-            || Number.isNaN(fechaLimiteParseada.getTime())
-            || fechaLimiteParseada.toISOString().slice(0, 10) !== fechaLimite) {
-            return res.status(400).json({ error: "La fecha de la última cuota no es válida" });
-        }
+        const fecha = cliente.fecha_registro || fechaHoyColombia();
+        const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
 
         // 1. Guardar en SQLite
         const resDb = db.prepare(`
