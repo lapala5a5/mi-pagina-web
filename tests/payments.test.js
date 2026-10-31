@@ -134,6 +134,30 @@ function fechaColombia(fecha = new Date()) {
       throw new Error(`La modalidad y el número de cuotas no se conservaron: ${listaPrestamos.body}`);
     }
 
+    const fechaLimiteElegida = '2026-12-24';
+    const prestamoConFechaElegida = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Quincenal',
+      numero_cuotas: 4,
+      fecha_limite: fechaLimiteElegida
+    });
+    if (prestamoConFechaElegida.statusCode !== 201
+      || JSON.parse(prestamoConFechaElegida.body).fecha_limite !== fechaLimiteElegida) {
+      throw new Error(`No se guardó la fecha de última cuota elegida: ${prestamoConFechaElegida.body}`);
+    }
+
+    const prestamoConFechaInvalida = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 4,
+      fecha_limite: '2026-02-30'
+    });
+    if (prestamoConFechaInvalida.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar una fecha de última cuota inválida: ${prestamoConFechaInvalida.body}`);
+    }
+
     const pagoRes = await request('POST', '/api/pagos', {
       prestamo_id: prestamoId,
       monto: 200,

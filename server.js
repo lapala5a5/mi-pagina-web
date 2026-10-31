@@ -189,7 +189,7 @@ app.get("/api/prestamos", (req, res) => {
 // RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
 app.post("/api/prestamos", async (req, res) => {
     try {
-        const { cliente_id, monto, frecuencia_pago, numero_cuotas } = req.body;
+        const { cliente_id, monto, frecuencia_pago, numero_cuotas, fecha_limite } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
@@ -211,7 +211,18 @@ app.post("/api/prestamos", async (req, res) => {
         const interes = montoNumber * 0.20;
         const total = montoNumber + interes;
         const fecha = fechaHoyColombia();
-        const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
+        const fechaLimite = fecha_limite === undefined
+            ? calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas)
+            : fecha_limite;
+        const fechaLimiteParseada = typeof fechaLimite === "string"
+            ? new Date(`${fechaLimite}T00:00:00Z`)
+            : null;
+        if (typeof fechaLimite !== "string"
+            || !/^\d{4}-\d{2}-\d{2}$/.test(fechaLimite)
+            || Number.isNaN(fechaLimiteParseada.getTime())
+            || fechaLimiteParseada.toISOString().slice(0, 10) !== fechaLimite) {
+            return res.status(400).json({ error: "La fecha de la última cuota no es válida" });
+        }
 
         // 1. Guardar en SQLite
         const resDb = db.prepare(`

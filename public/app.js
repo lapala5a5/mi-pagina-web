@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-cuotas").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarTotalPrestamo);
+    document.getElementById("pres-limite").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("form-operacion").addEventListener("reset", () => {
         setTimeout(() => {
             actualizarTipoCliente();
@@ -133,19 +134,20 @@ function actualizarTotalPrestamo() {
     const valorCuota = (centavosPorCuota + (cuotasConCentavoExtra > 0 ? 1 : 0)) / 100;
     document.getElementById("pres-valor-cuota").textContent = formatoMoneda(valorCuota);
 
-    const fechaInicio = fechaHoyColombia();
-    document.getElementById("pres-fecha-inicio").textContent =
-        `Inicio del calendario: ${fechaLegible(fechaInicio)} (hora de Colombia)`;
+    if (!fechaLimite.value) {
+        fechaLimite.value = fechaCobro(fechaHoyColombia(), frecuencia, cuotas);
+    }
     const fechas = Array.from({ length: cuotas }, (_, indice) =>
-        fechaCobro(fechaInicio, frecuencia, indice + 1)
+        fechaCobro(fechaLimite.value, frecuencia, indice - (cuotas - 1))
     );
+    document.getElementById("pres-fecha-inicio").textContent =
+        `Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechaLimite.value)}`;
     calendario.replaceChildren(...fechas.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
         elemento.textContent = `${fechaLegible(fecha)} — ${formatoMoneda(cuotaEnCentavos / 100)}`;
         return elemento;
     }));
-    fechaLimite.value = fechas[fechas.length - 1];
 }
 
 function fechaHoyColombia() {
@@ -348,7 +350,8 @@ async function registrarOperacion(e) {
                 cliente_id: clienteId,
                 monto: document.getElementById("pres-monto").value,
                 frecuencia_pago: document.getElementById("pres-frecuencia").value,
-                numero_cuotas: document.getElementById("pres-cuotas").value
+                numero_cuotas: document.getElementById("pres-cuotas").value,
+                fecha_limite: document.getElementById("pres-limite").value
             })
         });
         const prestamoData = await prestamoRes.json();
