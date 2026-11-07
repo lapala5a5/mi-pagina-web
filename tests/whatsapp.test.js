@@ -54,4 +54,20 @@ const sinFecha = contexto.crearEnlaceCalendario({ nombre: "Ana Pérez" }, { fech
 assert.equal(sinFecha, "", "No se debe crear un enlace de alarma si falta una fecha válida.");
 assert.equal(url.includes("token"), false);
 
+const contactoWhatsApp = new URL(contexto.crearEnlaceWhatsAppContacto({
+    nombre: "Ana Pérez",
+    telefono: "300 123 4567"
+}));
+assert.equal(contactoWhatsApp.origin, "https://wa.me");
+assert.equal(contactoWhatsApp.pathname, "/573001234567");
+assert.equal(
+    contactoWhatsApp.searchParams.get("text"),
+    "Hola Ana Pérez, te escribo para ponerme en contacto contigo."
+);
+assert.equal(
+    contexto.crearEnlaceWhatsAppContacto({ nombre: "Sin teléfono", telefono: "" }),
+    "",
+    "No debe generar un enlace de WhatsApp sin un teléfono válido."
+);
+
 console.log("El enlace prepara los datos del cliente para enviarlos por WhatsApp.");

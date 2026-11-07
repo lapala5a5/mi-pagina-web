@@ -4,6 +4,13 @@ document.addEventListener("DOMContentLoaded", () => {
     cargarPrestamos();
     cargarResumen();
 
+    document.getElementById("actualizar-datos").addEventListener("click", () => {
+        Promise.all([cargarClientes(), cargarPrestamos(), cargarResumen()]);
+    });
+    document.getElementById("buscar-clientes").addEventListener("input", renderizarClientes);
+    document.getElementById("buscar-prestamos").addEventListener("input", renderizarPrestamos);
+    document.getElementById("filtro-estado-prestamos").addEventListener("change", renderizarPrestamos);
+    document.getElementById("cerrar-notificacion-registro").addEventListener("click", ocultarNotificacionRegistro);
     document.getElementById("form-operacion").addEventListener("submit", registrarOperacion);
     document.getElementById("enviar-whatsapp").addEventListener("click", enviarDatosWhatsApp);
     document.getElementById("pres-fecha-inicio").value = fechaHoyColombia();
@@ -48,14 +55,59 @@ const HEADERS_BASE = {
 };
 
 let clientesCargados = [];
+let prestamosCargados = [];
 let fechasCalendario = [];
+let temporizadorNotificacionRegistro;
+
+function mostrarNotificacionRegistro(mensaje, tipo = "success") {
+    const notificacion = document.getElementById("notificacion-registro");
+    document.getElementById("notificacion-registro-mensaje").textContent = mensaje;
+    notificacion.dataset.type = tipo;
+    notificacion.hidden = false;
+    window.clearTimeout(temporizadorNotificacionRegistro);
+    temporizadorNotificacionRegistro = window.setTimeout(ocultarNotificacionRegistro, 8000);
+}
+
+function ocultarNotificacionRegistro() {
+    const notificacion = document.getElementById("notificacion-registro");
+    notificacion.hidden = true;
+    window.clearTimeout(temporizadorNotificacionRegistro);
+}
 
 // --- CLIENTES ---
+
+function agregarCelda(fila, texto, clase = "p-3") {
+    const celda = document.createElement("td");
+    celda.className = clase;
+    celda.textContent = texto;
+    fila.append(celda);
+    return celda;
+}
+
+function mostrarMensajeTabla(tbody, columnas, mensaje) {
+    const fila = document.createElement("tr");
+    const celda = document.createElement("td");
+    celda.colSpan = columnas;
+    celda.className = "p-4 text-center text-slate-500";
+    celda.textContent = mensaje;
+    fila.append(celda);
+    tbody.replaceChildren(fila);
+}
+
+function crearBotonTabla(texto, clase, accion) {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = clase;
+    boton.textContent = texto;
+    boton.addEventListener("click", accion);
+    return boton;
+}
 
 // 1. Obtener y mostrar clientes
 async function cargarClientes() {
     try {
         const res = await fetch("/api/clientes", { headers: HEADERS_BASE });
+        if (!res.ok) throw new Error(`Error del servidor (${res.status})`);
         const clientes = await res.json();
         clientesCargados = clientes;
 
@@ -75,37 +127,68 @@ async function cargarClientes() {
             if (clientes.length === 0) {
                 document.querySelector('input[name="tipo-cliente"][value="nuevo"]').checked = true;
                 actualizarTipoCliente();
+                actualizarFechaInicioDesdeCliente();
+                actualizarCalendarioAutomatico();
             }
         }
 
-        // Actualizar Tabla de clientes
-        const tbody = document.getElementById("tabla-clientes");
-        if (tbody) {
-            tbody.innerHTML = "";
-            if (clientes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No hay clientes registrados.</td></tr>`;
-                return;
-            }
-
-            clientes.forEach(c => {
-                tbody.innerHTML += `
-                    <tr class="border-b hover:bg-gray-50 text-sm">
-                        <td class="p-3 font-medium">${c.nombre}</td>
-                        <td class="p-3">${c.documento}</td>
-                        <td class="p-3">${c.telefono || 'N/A'}</td>
-                        <td class="p-3">${c.direccion_trabajo || 'N/A'}</td>
-                        <td class="p-3">
-                            <button onclick="eliminarCliente(${c.id}, '${c.nombre}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 font-semibold transition">
-                                Eliminar Cliente
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
+        renderizarClientes();
     } catch (error) {
         console.error("Error al cargar clientes:", error);
+        const tbody = document.getElementById("tabla-clientes");
+        if (tbody) mostrarMensajeTabla(tbody, 5, "No se pudieron cargar los clientes. Pulsa «Actualizar datos» para reintentar.");
     }
+}
+
+function renderizarClientes() {
+    const tbody = document.getElementById("tabla-clientes");
+    if (!tbody) return;
+
+    const busqueda = document.getElementById("buscar-clientes").value.trim().toLocaleLowerCase();
+    const clientesFiltrados = clientesCargados.filter(cliente =>
+        [cliente.nombre, cliente.documento, cliente.telefono, cliente.direccion_trabajo]
+            .some(valor => String(valor || "").toLocaleLowerCase().includes(busqueda))
+    );
+    document.getElementById("clientes-resultados").textContent =
+        `${clientesFiltrados.length} de ${clientesCargados.length} cliente${clientesCargados.length === 1 ? "" : "s"}`;
+
+    if (clientesFiltrados.length === 0) {
+        mostrarMensajeTabla(
+            tbody,
+            5,
+            clientesCargados.length ? "No hay clientes que coincidan con la búsqueda." : "No hay clientes registrados."
+        );
+        return;
+    }
+
+    const filas = clientesFiltrados.map(cliente => {
+        const fila = document.createElement("tr");
+        fila.className = "border-b text-sm hover:bg-gray-50";
+        agregarCelda(fila, cliente.nombre, "p-3 font-medium");
+        agregarCelda(fila, cliente.documento);
+        agregarCelda(fila, cliente.telefono || "N/A");
+        agregarCelda(fila, cliente.direccion_trabajo || "N/A");
+        const acciones = document.createElement("td");
+        acciones.className = "space-x-2 p-3";
+        const enlaceWhatsApp = crearEnlaceWhatsAppContacto(cliente);
+        const botonWhatsApp = crearBotonTabla(
+            "WhatsApp",
+            "rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50",
+            () => {
+                if (enlaceWhatsApp) window.open(enlaceWhatsApp, "_blank", "noopener,noreferrer");
+            }
+        );
+        botonWhatsApp.disabled = !enlaceWhatsApp;
+        if (!enlaceWhatsApp) botonWhatsApp.title = "Este cliente no tiene un teléfono válido registrado.";
+        acciones.append(botonWhatsApp, crearBotonTabla(
+            "Eliminar cliente",
+            "rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700",
+            () => eliminarCliente(cliente.id, cliente.nombre)
+        ));
+        fila.append(acciones);
+        return fila;
+    });
+    tbody.replaceChildren(...filas);
 }
 
 function actualizarTipoCliente() {
@@ -452,6 +535,7 @@ async function registrarOperacion(e) {
         if (!prestamoRes.ok) {
             if (clienteCreado) {
                 await cargarClientes();
+                mostrarNotificacionRegistro("El cliente quedó registrado, pero no se pudo crear el préstamo.", "error");
                 alert(`El cliente quedó registrado, pero no se pudo crear el préstamo: ${prestamoData.error || "Error desconocido"}. Revisa WhatsApp y pulsa Enviar para mandar la alerta.`);
             } else {
                 alert("No se pudo crear el préstamo: " + (prestamoData.error || "Error desconocido"));
@@ -464,11 +548,16 @@ async function registrarOperacion(e) {
         const mensajeRegistro = clienteCreado
             ? "Cliente y préstamo registrados correctamente. Usa el botón de WhatsApp si también quieres compartir los datos."
             : "Préstamo registrado correctamente.";
-        alert(mensajeRegistro);
+        if (clienteCreado) {
+            mostrarNotificacionRegistro(mensajeRegistro);
+        } else {
+            alert(mensajeRegistro);
+        }
     } catch (error) {
         console.error("Error al registrar cliente y préstamo:", error);
         if (clienteCreado) {
             await cargarClientes();
+            mostrarNotificacionRegistro("El cliente quedó registrado, pero no se pudo completar el préstamo.", "error");
             alert("El cliente quedó registrado, pero hubo un error de conexión al crear el préstamo.");
         } else {
             alert("Error de conexión con el servidor");
@@ -518,62 +607,99 @@ async function eliminarCliente(id, nombre) {
 async function cargarPrestamos() {
     try {
         const res = await fetch("/api/prestamos", { headers: HEADERS_BASE });
-        const prestamos = await res.json();
-
-        const tbody = document.getElementById("tabla-prestamos");
-        if (!tbody) return;
-
-        tbody.innerHTML = "";
-
-        if (prestamos.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">No hay préstamos activos.</td></tr>`;
-            return;
-        }
-
-        prestamos.forEach(p => {
-            const estadoColor = p.estado === 'Pagado' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
-            const saldoActual = Number(p.saldo_actual || 0);
-            const numeroCuotas = Number(p.numero_cuotas || 1);
-            const valorCuota = Number(p.total) / numeroCuotas;
-
-            tbody.innerHTML += `
-                <tr class="border-b hover:bg-gray-50 text-sm">
-                    <td class="p-3 font-medium">${p.cliente}</td>
-                    <td class="p-3">$${Number(p.monto).toLocaleString()}</td>
-                    <td class="p-3 font-semibold text-gray-700">$${saldoActual.toLocaleString()}</td>
-                    <td class="p-3 font-bold">
-                        $${Number(p.total).toLocaleString()}
-                        <span class="block text-xs font-normal text-gray-500">${Number(p.porcentaje)}% de interés</span>
-                    </td>
-                    <td class="p-3">
-                        <span class="block font-semibold">${p.frecuencia_pago || 'Sin definir'}</span>
-                        <span class="text-xs text-gray-500">${numeroCuotas} cuota${numeroCuotas === 1 ? '' : 's'} · $${valorCuota.toLocaleString('es-CO', { maximumFractionDigits: 2 })} c/u</span>
-                    </td>
-                    <td class="p-3">${p.fecha_limite || 'Sin fecha'}</td>
-                    <td class="p-3">
-                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${estadoColor}">
-                            ${p.estado}
-                        </span>
-                    </td>
-                    <td class="p-3 space-x-1">
-                        ${p.estado === 'Pendiente' ? `
-                            <button onclick="abonarPrestamo(${p.id}, '${p.cliente}', '${p.telefono || ''}')" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 font-semibold transition">
-                                Abonar
-                            </button>
-                            <button onclick="marcarPagado(${p.id})" class="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700 font-semibold transition">
-                                Pagar todo
-                            </button>
-                        ` : ''}
-                        <button onclick="eliminarPrestamo(${p.id})" class="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600 font-semibold transition">
-                            Borrar
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
+        if (!res.ok) throw new Error(`Error del servidor (${res.status})`);
+        prestamosCargados = await res.json();
+        renderizarPrestamos();
     } catch (error) {
         console.error("Error al cargar préstamos:", error);
+        const tbody = document.getElementById("tabla-prestamos");
+        if (tbody) mostrarMensajeTabla(tbody, 8, "No se pudieron cargar los préstamos. Pulsa «Actualizar datos» para reintentar.");
     }
+}
+
+function renderizarPrestamos() {
+    const tbody = document.getElementById("tabla-prestamos");
+    if (!tbody) return;
+
+    const busqueda = document.getElementById("buscar-prestamos").value.trim().toLocaleLowerCase();
+    const estado = document.getElementById("filtro-estado-prestamos").value;
+    const prestamosFiltrados = prestamosCargados.filter(prestamo =>
+        String(prestamo.cliente || "").toLocaleLowerCase().includes(busqueda)
+        && (!estado || prestamo.estado === estado)
+    );
+    document.getElementById("prestamos-resultados").textContent =
+        `${prestamosFiltrados.length} de ${prestamosCargados.length} préstamo${prestamosCargados.length === 1 ? "" : "s"}`;
+
+    if (prestamosFiltrados.length === 0) {
+        mostrarMensajeTabla(
+            tbody,
+            8,
+            prestamosCargados.length ? "No hay préstamos que coincidan con los filtros." : "No hay préstamos registrados."
+        );
+        return;
+    }
+
+    const formatoMoneda = cantidad => `$${Number(cantidad || 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+    const filas = prestamosFiltrados.map(prestamo => {
+        const fila = document.createElement("tr");
+        fila.className = "border-b text-sm hover:bg-gray-50";
+        const saldoActual = Number(prestamo.saldo_actual || 0);
+        const numeroCuotas = Number(prestamo.numero_cuotas || 1);
+        const valorCuota = Number(prestamo.total) / numeroCuotas;
+
+        agregarCelda(fila, prestamo.cliente, "p-3 font-medium");
+        agregarCelda(fila, formatoMoneda(prestamo.monto));
+        agregarCelda(fila, formatoMoneda(saldoActual), "p-3 font-semibold text-gray-700");
+        const total = agregarCelda(fila, "", "p-3 font-bold");
+        total.append(document.createTextNode(formatoMoneda(prestamo.total)));
+        const interes = document.createElement("span");
+        interes.className = "block text-xs font-normal text-gray-500";
+        interes.textContent = `${Number(prestamo.porcentaje)}% de interés`;
+        total.append(interes);
+
+        const modalidad = agregarCelda(fila, "", "p-3");
+        const frecuencia = document.createElement("span");
+        frecuencia.className = "block font-semibold";
+        frecuencia.textContent = prestamo.frecuencia_pago || "Sin definir";
+        const detalleCuota = document.createElement("span");
+        detalleCuota.className = "text-xs text-gray-500";
+        detalleCuota.textContent = `${numeroCuotas} cuota${numeroCuotas === 1 ? "" : "s"} · ${formatoMoneda(valorCuota)} c/u`;
+        modalidad.append(frecuencia, detalleCuota);
+        agregarCelda(fila, prestamo.fecha_limite || "Sin fecha");
+
+        const estadoCelda = document.createElement("td");
+        estadoCelda.className = "p-3";
+        const etiquetaEstado = document.createElement("span");
+        etiquetaEstado.className = `rounded-full px-2 py-1 text-xs font-semibold ${prestamo.estado === "Pagado" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`;
+        etiquetaEstado.textContent = prestamo.estado;
+        estadoCelda.append(etiquetaEstado);
+        fila.append(estadoCelda);
+
+        const acciones = document.createElement("td");
+        acciones.className = "space-x-1 p-3";
+        if (prestamo.estado === "Pendiente") {
+            acciones.append(
+                crearBotonTabla(
+                    "Abonar",
+                    "rounded bg-green-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-green-700",
+                    () => abonarPrestamo(prestamo.id, prestamo.cliente, prestamo.telefono || "")
+                ),
+                crearBotonTabla(
+                    "Pagar todo",
+                    "rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white transition hover:bg-blue-700",
+                    () => marcarPagado(prestamo.id)
+                )
+            );
+        }
+        acciones.append(crearBotonTabla(
+            "Borrar",
+            "rounded bg-gray-500 px-2 py-1 text-xs font-semibold text-white transition hover:bg-gray-600",
+            () => eliminarPrestamo(prestamo.id)
+        ));
+        fila.append(acciones);
+        return fila;
+    });
+    tbody.replaceChildren(...filas);
 }
 
 // 6. Marcar préstamo como pagado
@@ -754,4 +880,15 @@ function enviarWhatsApp(telefono, cliente, monto) {
     const url = `https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`;
 
     window.open(url, '_blank');
+}
+
+function crearEnlaceWhatsAppContacto(cliente) {
+    let numero = String(cliente.telefono || "").replace(/\D/g, "");
+    if (numero.length === 10) numero = `57${numero}`;
+    if (numero.length < 8 || numero.length > 15) return "";
+
+    const parametros = new URLSearchParams({
+        text: `Hola ${String(cliente.nombre || "").trim()}, te escribo para ponerme en contacto contigo.`
+    });
+    return `https://wa.me/${numero}?${parametros.toString()}`;
 }
