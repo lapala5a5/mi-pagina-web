@@ -111,8 +111,8 @@
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <label for="pres-fecha-inicio" class="field-label">Fecha de inicio del calendario <span class="text-rose-600">*</span></label>
-              <input type="text" id="pres-fecha-inicio" inputmode="numeric" placeholder="AAAA-MM-DD" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" required class="field-control">
-              <p class="mt-1 text-xs text-slate-500">Puedes escribir la fecha directamente, por ejemplo 2026-10-31. Al cambiarla se recalculan las cuotas.</p>
+              <input type="text" id="pres-fecha-inicio" readonly required class="field-control cursor-not-allowed bg-slate-100" aria-describedby="pres-fecha-ayuda">
+              <p id="pres-fecha-ayuda" class="mt-1 text-xs text-slate-500">Se establece automáticamente con la fecha de registro del cliente. Puedes ajustar las fechas de cada cuota en el calendario.</p>
             </div>
             <div>
               <label for="pres-monto" class="field-label">Monto a prestar <span class="text-rose-600">*</span></label>

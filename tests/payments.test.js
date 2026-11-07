@@ -113,7 +113,7 @@ function fechaColombia(fecha = new Date()) {
     const prestamoBody = JSON.parse(prestamoRes.body);
     const prestamoId = prestamoBody.id;
     const fechaEsperada = new Date('2026-01-31T00:00:00Z');
-    fechaEsperada.setUTCDate(fechaEsperada.getUTCDate() + 28);
+    fechaEsperada.setUTCDate(fechaEsperada.getUTCDate() + 21);
     if (prestamoBody.valor_cuota !== 300
       || prestamoBody.fecha_prestamo !== '2026-01-31'
       || prestamoBody.fecha_limite !== fechaEsperada.toISOString().split('T')[0]) {
@@ -146,7 +146,7 @@ function fechaColombia(fecha = new Date()) {
     const prestamoDesdeRegistroBody = JSON.parse(prestamoDesdeRegistro.body);
     if (prestamoDesdeRegistro.statusCode !== 201
       || prestamoDesdeRegistroBody.fecha_prestamo !== fechaRegistroPrueba
-      || prestamoDesdeRegistroBody.fecha_limite !== '2026-03-31') {
+      || prestamoDesdeRegistroBody.fecha_limite !== '2026-02-28') {
       throw new Error(`El calendario no empezó desde la fecha de registro del cliente: ${prestamoDesdeRegistro.body}`);
     }
     const prestamoQuincenalDesdeRegistro = await request('POST', '/api/prestamos', {
@@ -156,7 +156,7 @@ function fechaColombia(fecha = new Date()) {
       numero_cuotas: 2
     });
     if (prestamoQuincenalDesdeRegistro.statusCode !== 201
-      || JSON.parse(prestamoQuincenalDesdeRegistro.body).fecha_limite !== '2026-03-02') {
+      || JSON.parse(prestamoQuincenalDesdeRegistro.body).fecha_limite !== '2026-02-15') {
       throw new Error(`La frecuencia quincenal no contó intervalos de 15 días desde el registro: ${prestamoQuincenalDesdeRegistro.body}`);
     }
 
@@ -165,13 +165,21 @@ function fechaColombia(fecha = new Date()) {
       monto: 1000,
       frecuencia_pago: 'Semanal',
       numero_cuotas: 2,
-      fecha_inicio: '2026-02-01'
+      fecha_inicio: '2026-02-01',
+      fechas_cuotas: ['2026-02-01', '2026-02-20']
     });
     const prestamoConInicioEditadoBody = JSON.parse(prestamoConInicioEditado.body);
     if (prestamoConInicioEditado.statusCode !== 201
       || prestamoConInicioEditadoBody.fecha_prestamo !== '2026-02-01'
-      || prestamoConInicioEditadoBody.fecha_limite !== '2026-02-15') {
-      throw new Error(`No se recalcularon las cuotas desde la fecha de inicio elegida: ${prestamoConInicioEditado.body}`);
+      || prestamoConInicioEditadoBody.fecha_limite !== '2026-02-20'
+      || JSON.stringify(prestamoConInicioEditadoBody.calendario_cuotas) !== JSON.stringify(['2026-02-01', '2026-02-20'])) {
+      throw new Error(`No se guardaron las fechas individuales editadas: ${prestamoConInicioEditado.body}`);
+    }
+    const prestamosConCalendarioEditado = await request('GET', '/api/prestamos');
+    const calendarioEditadoGuardado = JSON.parse(prestamosConCalendarioEditado.body)
+      .find(prestamo => prestamo.id === prestamoConInicioEditadoBody.id);
+    if (JSON.stringify(calendarioEditadoGuardado.calendario_cuotas) !== JSON.stringify(['2026-02-01', '2026-02-20'])) {
+      throw new Error(`No persistieron las fechas editadas del calendario: ${prestamosConCalendarioEditado.body}`);
     }
 
     const inicioInvalido = await request('POST', '/api/prestamos', {
@@ -183,6 +191,17 @@ function fechaColombia(fecha = new Date()) {
     });
     if (inicioInvalido.statusCode !== 400) {
       throw new Error(`Se esperaba rechazar una fecha de inicio inválida: ${inicioInvalido.body}`);
+    }
+
+    const calendarioFueraDeOrden = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 2,
+      fechas_cuotas: ['2026-02-20', '2026-02-04']
+    });
+    if (calendarioFueraDeOrden.statusCode !== 400) {
+      throw new Error(`Se esperaba rechazar las fechas de cuotas desordenadas: ${calendarioFueraDeOrden.body}`);
     }
 
     const fechaRegistroInvalida = await request('POST', '/api/clientes', {
@@ -202,7 +221,7 @@ function fechaColombia(fecha = new Date()) {
       fecha_limite: '2026-12-24'
     });
     if (prestamoConFechaElegida.statusCode !== 201
-      || JSON.parse(prestamoConFechaElegida.body).fecha_limite !== '2026-04-01') {
+      || JSON.parse(prestamoConFechaElegida.body).fecha_limite !== '2026-03-17') {
       throw new Error(`La fecha final debe calcularse desde el registro del cliente, no desde una fecha final enviada: ${prestamoConFechaElegida.body}`);
     }
 

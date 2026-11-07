@@ -8,23 +8,18 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("enviar-whatsapp").addEventListener("click", enviarDatosWhatsApp);
     document.getElementById("pres-fecha-inicio").value = fechaHoyColombia();
     validarFechaInicio();
-    document.getElementById("pres-fecha-inicio").addEventListener("input", () => {
-        validarFechaInicio();
-        actualizarTotalPrestamo();
-    });
     document.querySelectorAll('input[name="tipo-cliente"]').forEach(opcion => {
         opcion.addEventListener("change", () => {
             actualizarTipoCliente();
-            if (document.querySelector('input[name="tipo-cliente"]:checked').value === "existente") {
-                actualizarFechaInicioDesdeCliente();
-            }
-            actualizarTotalPrestamo();
+            actualizarFechaInicioDesdeCliente();
+            actualizarCalendarioAutomatico();
         });
     });
     document.getElementById("pres-monto").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-porcentaje").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-cuotas").addEventListener("input", actualizarCalendarioAutomatico);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarCalendarioAutomatico);
+    document.getElementById("pres-calendario").addEventListener("change", actualizarFechaCuota);
     document.getElementById("pres-cliente").addEventListener("change", () => {
         actualizarFechaInicioDesdeCliente();
         actualizarCalendarioAutomatico();
@@ -34,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("pres-fecha-inicio").value = fechaHoyColombia();
             validarFechaInicio();
             actualizarTipoCliente();
-            actualizarTotalPrestamo();
+            actualizarCalendarioAutomatico();
             programarActualizacionMedianoche();
             window.addEventListener("focus", actualizarTotalPrestamo);
             document.addEventListener("visibilitychange", () => {
@@ -53,6 +48,7 @@ const HEADERS_BASE = {
 };
 
 let clientesCargados = [];
+let fechasCalendario = [];
 
 // --- CLIENTES ---
 
@@ -144,6 +140,7 @@ function actualizarTotalPrestamo() {
     if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) {
         document.getElementById("pres-valor-cuota").textContent = "$0";
         calendario.replaceChildren();
+        fechasCalendario = [];
         document.getElementById("pres-fecha-resumen").textContent = "";
         return;
     }
@@ -157,28 +154,61 @@ function actualizarTotalPrestamo() {
     const fechaRegistro = document.getElementById("pres-fecha-inicio").value;
     if (!validarFechaInicio()) {
         calendario.replaceChildren();
+        fechasCalendario = [];
         document.getElementById("pres-fecha-resumen").textContent = "Escribe una fecha válida en formato AAAA-MM-DD.";
         return;
     }
-    const fechas = Array.from({ length: cuotas }, (_, indice) =>
-        fechaCobro(fechaRegistro, frecuencia, indice + 1)
-    );
+    if (fechasCalendario.length !== cuotas) {
+        fechasCalendario = Array.from({ length: cuotas }, (_, indice) =>
+            fechaCobro(fechaRegistro, frecuencia, indice)
+        );
+    }
+    const fechasValidas = fechasCalendario.every((fecha, indice) => validarFechaISO(fecha)
+        && (indice === 0 || fecha > fechasCalendario[indice - 1]));
     document.getElementById("pres-fecha-resumen").textContent =
-        `Cuenta desde el registro: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechaLegible(fechas[0])} · Última cuota: ${fechaLegible(fechas[fechas.length - 1])}`;
-    calendario.replaceChildren(...fechas.map((fecha, indice) => {
+        `Inicio: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechas[0] ? fechaLegible(fechas[0]) : "Sin fecha"} · Última cuota: ${fechas[fechas.length - 1] ? fechaLegible(fechas[fechas.length - 1]) : "Sin fecha"}${fechasValidas ? "" : " · Revisa que las fechas sean válidas y estén en orden."}`;
+    calendario.replaceChildren(...fechasCalendario.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
-        elemento.textContent = `${fechaLegible(fecha)} — ${formatoMoneda(cuotaEnCentavos / 100)}`;
+        const etiqueta = document.createElement("label");
+        etiqueta.className = "mb-2 flex flex-wrap items-center gap-2";
+        const numero = document.createElement("span");
+        numero.textContent = `Cuota ${indice + 1} — ${formatoMoneda(cuotaEnCentavos / 100)}`;
+        const campoFecha = document.createElement("input");
+        campoFecha.type = "date";
+        campoFecha.value = fecha;
+        campoFecha.required = true;
+        campoFecha.dataset.cuotaIndex = String(indice);
+        campoFecha.setCustomValidity(fechasValidas ? "" : "Las fechas deben ser válidas y estar en orden ascendente.");
+        campoFecha.className = "field-control max-w-48";
+        etiqueta.append(numero, campoFecha);
+        elemento.append(etiqueta);
         return elemento;
     }));
 }
 
 function actualizarCalendarioAutomatico() {
+    fechasCalendario = [];
     actualizarTotalPrestamo();
 }
 
+function actualizarFechaCuota(evento) {
+    const campoFecha = evento.target;
+    if (!(campoFecha instanceof HTMLInputElement) || campoFecha.dataset.cuotaIndex === undefined) return;
+    const indice = Number(campoFecha.dataset.cuotaIndex);
+    fechasCalendario[indice] = campoFecha.value;
+    actualizarTotalPrestamo();
+}
+
+function validarFechaISO(fecha) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
+    const fechaParseada = new Date(`${fecha}T00:00:00Z`);
+    return !Number.isNaN(fechaParseada.getTime()) && fechaParseada.toISOString().slice(0, 10) === fecha;
+}
+
 function actualizarFechaInicioDesdeCliente() {
-    const cliente = obtenerClienteSeleccionado();
+    const esNuevo = document.querySelector('input[name="tipo-cliente"]:checked').value === "nuevo";
+    const cliente = esNuevo ? null : obtenerClienteSeleccionado();
     const campoFechaInicio = document.getElementById("pres-fecha-inicio");
     campoFechaInicio.value = cliente?.fecha_registro || fechaHoyColombia();
     validarFechaInicio();
@@ -187,12 +217,7 @@ function actualizarFechaInicioDesdeCliente() {
 function validarFechaInicio() {
     const campo = document.getElementById("pres-fecha-inicio");
     const fecha = campo.value;
-    const fechaParseada = /^\d{4}-\d{2}-\d{2}$/.test(fecha)
-        ? new Date(`${fecha}T00:00:00Z`)
-        : null;
-    const valida = Boolean(fechaParseada
-        && !Number.isNaN(fechaParseada.getTime())
-        && fechaParseada.toISOString().slice(0, 10) === fecha);
+    const valida = validarFechaISO(fecha);
     campo.setCustomValidity(valida ? "" : "Escribe una fecha válida en formato AAAA-MM-DD.");
     return valida;
 }
@@ -269,15 +294,9 @@ function obtenerDatosPrestamoFormulario() {
         frecuencia: document.getElementById("pres-frecuencia").value,
         cuotas: document.getElementById("pres-cuotas").value,
         valorCuota: document.getElementById("pres-valor-cuota").textContent,
-        fechaLimite: calcularFechaLimiteFormulario()
+        fechasCuotas: [...fechasCalendario],
+        fechaLimite: fechasCalendario[fechasCalendario.length - 1] || ""
     };
-}
-
-function calcularFechaLimiteFormulario() {
-    const cuotas = Number(document.getElementById("pres-cuotas").value);
-    if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 120) return "";
-    const fechaRegistro = document.getElementById("pres-fecha-inicio").value || fechaHoyColombia();
-    return fechaCobro(fechaRegistro, document.getElementById("pres-frecuencia").value, cuotas);
 }
 
 function crearEnlaceCalendario(cliente, prestamo) {
@@ -420,7 +439,8 @@ async function registrarOperacion(e) {
                 porcentaje: document.getElementById("pres-porcentaje").value,
                 frecuencia_pago: document.getElementById("pres-frecuencia").value,
                 numero_cuotas: document.getElementById("pres-cuotas").value,
-                fecha_inicio: document.getElementById("pres-fecha-inicio").value
+                fecha_inicio: document.getElementById("pres-fecha-inicio").value,
+                fechas_cuotas: fechasCalendario
             })
         });
         const prestamoData = await prestamoRes.json();

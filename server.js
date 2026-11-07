@@ -68,6 +68,7 @@ db.exec(`
         fecha_limite TEXT,
         frecuencia_pago TEXT NOT NULL DEFAULT 'Sin definir',
         numero_cuotas INTEGER NOT NULL DEFAULT 1,
+        calendario_json TEXT,
         estado TEXT CHECK(estado IN ('Pendiente', 'Pagado')) NOT NULL,
         fecha_actualizacion TEXT,
         FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
@@ -102,6 +103,10 @@ if (!tableHasColumn("prestamos", "frecuencia_pago")) {
 
 if (!tableHasColumn("prestamos", "numero_cuotas")) {
     db.exec("ALTER TABLE prestamos ADD COLUMN numero_cuotas INTEGER NOT NULL DEFAULT 1");
+}
+
+if (!tableHasColumn("prestamos", "calendario_json")) {
+    db.exec("ALTER TABLE prestamos ADD COLUMN calendario_json TEXT");
 }
 
 db.prepare("UPDATE prestamos SET saldo_actual = CASE WHEN estado = 'Pagado' THEN 0 ELSE total END WHERE saldo_actual IS NULL OR saldo_actual = 0").run();
@@ -181,12 +186,15 @@ function calcularFechaCobro(fechaInicio, frecuencia, numeroCuota) {
 app.get("/api/prestamos", (req, res) => {
     try {
         const prestamos = db.prepare(`
-            SELECT p.id, p.cliente_id, c.nombre AS cliente, c.telefono, p.monto, p.porcentaje, p.interes, p.total, p.saldo_actual, p.fecha_prestamo, p.fecha_limite, p.frecuencia_pago, p.numero_cuotas, p.estado,
+            SELECT p.id, p.cliente_id, c.nombre AS cliente, c.telefono, p.monto, p.porcentaje, p.interes, p.total, p.saldo_actual, p.fecha_prestamo, p.fecha_limite, p.frecuencia_pago, p.numero_cuotas, p.calendario_json, p.estado,
                    (p.total - p.saldo_actual) AS pagado
             FROM prestamos p
             JOIN clientes c ON p.cliente_id = c.id
             ORDER BY p.id DESC
-        `).all();
+        `).all().map(({ calendario_json, ...prestamo }) => ({
+            ...prestamo,
+            calendario_cuotas: calendario_json ? JSON.parse(calendario_json) : []
+        }));
         res.json(prestamos);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -196,7 +204,7 @@ app.get("/api/prestamos", (req, res) => {
 // RUTA POST /api/prestamos (Con Webhook hacia Make.com integrado)
 app.post("/api/prestamos", async (req, res) => {
     try {
-        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas, fecha_inicio } = req.body;
+        const { cliente_id, monto, porcentaje = 20, frecuencia_pago, numero_cuotas, fecha_inicio, fechas_cuotas } = req.body;
         if (!cliente_id || monto === undefined || !frecuencia_pago || numero_cuotas === undefined) {
             return res.status(400).json({ error: "Cliente, monto, frecuencia de pago y número de cuotas son requeridos" });
         }
@@ -231,14 +239,36 @@ app.post("/api/prestamos", async (req, res) => {
             || fechaParseada.toISOString().slice(0, 10) !== fecha) {
             return res.status(400).json({ error: "La fecha de inicio del calendario no es válida" });
         }
-        const fechaLimite = calcularFechaCobro(fecha, frecuencia_pago, numeroCuotas);
+        const fechasCuotas = fechas_cuotas === undefined
+            ? Array.from({ length: numeroCuotas }, (_, indice) =>
+                calcularFechaCobro(fecha, frecuencia_pago, indice)
+            )
+            : fechas_cuotas;
+        if (!Array.isArray(fechasCuotas) || fechasCuotas.length !== numeroCuotas) {
+            return res.status(400).json({ error: "Debe indicar una fecha válida para cada cuota" });
+        }
+        for (let indice = 0; indice < fechasCuotas.length; indice += 1) {
+            const fechaCuota = fechasCuotas[indice];
+            const fechaParseada = typeof fechaCuota === "string"
+                ? new Date(`${fechaCuota}T00:00:00Z`)
+                : null;
+            if (typeof fechaCuota !== "string"
+                || !/^\d{4}-\d{2}-\d{2}$/.test(fechaCuota)
+                || Number.isNaN(fechaParseada.getTime())
+                || fechaParseada.toISOString().slice(0, 10) !== fechaCuota
+                || (indice === 0 && fechaCuota < fecha)
+                || (indice > 0 && fechaCuota <= fechasCuotas[indice - 1])) {
+                return res.status(400).json({ error: "Las fechas de las cuotas deben ser válidas y estar en orden ascendente" });
+            }
+        }
+        const fechaLimite = fechasCuotas[fechasCuotas.length - 1];
 
         // 1. Guardar en SQLite
         const resDb = db.prepare(`
             INSERT INTO prestamos (
                 cliente_id, monto, porcentaje, interes, total, saldo_actual,
-                fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, estado
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fecha_prestamo, fecha_limite, frecuencia_pago, numero_cuotas, calendario_json, estado
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             cliente_id,
             montoNumber,
@@ -250,6 +280,7 @@ app.post("/api/prestamos", async (req, res) => {
             fechaLimite,
             frecuencia_pago,
             numeroCuotas,
+            JSON.stringify(fechasCuotas),
             "Pendiente"
         );
 
@@ -261,7 +292,8 @@ app.post("/api/prestamos", async (req, res) => {
             saldo_actual: total,
             valor_cuota: total / numeroCuotas,
             fecha_prestamo: fecha,
-            fecha_limite: fechaLimite
+            fecha_limite: fechaLimite,
+            calendario_cuotas: fechasCuotas
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
