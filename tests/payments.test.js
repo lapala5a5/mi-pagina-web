@@ -165,21 +165,43 @@ function fechaColombia(fecha = new Date()) {
       monto: 1000,
       frecuencia_pago: 'Semanal',
       numero_cuotas: 2,
-      fecha_inicio: '2026-02-01',
-      fechas_cuotas: ['2026-02-01', '2026-02-20']
+      fecha_inicio: fechaRegistroPrueba,
+      fechas_cuotas: [fechaRegistroPrueba, '2026-02-20']
     });
     const prestamoConInicioEditadoBody = JSON.parse(prestamoConInicioEditado.body);
     if (prestamoConInicioEditado.statusCode !== 201
-      || prestamoConInicioEditadoBody.fecha_prestamo !== '2026-02-01'
+      || prestamoConInicioEditadoBody.fecha_prestamo !== fechaRegistroPrueba
       || prestamoConInicioEditadoBody.fecha_limite !== '2026-02-20'
-      || JSON.stringify(prestamoConInicioEditadoBody.calendario_cuotas) !== JSON.stringify(['2026-02-01', '2026-02-20'])) {
+      || JSON.stringify(prestamoConInicioEditadoBody.calendario_cuotas) !== JSON.stringify([fechaRegistroPrueba, '2026-02-20'])) {
       throw new Error(`No se guardaron las fechas individuales editadas: ${prestamoConInicioEditado.body}`);
     }
     const prestamosConCalendarioEditado = await request('GET', '/api/prestamos');
     const calendarioEditadoGuardado = JSON.parse(prestamosConCalendarioEditado.body)
       .find(prestamo => prestamo.id === prestamoConInicioEditadoBody.id);
-    if (JSON.stringify(calendarioEditadoGuardado.calendario_cuotas) !== JSON.stringify(['2026-02-01', '2026-02-20'])) {
+    if (JSON.stringify(calendarioEditadoGuardado.calendario_cuotas) !== JSON.stringify([fechaRegistroPrueba, '2026-02-20'])) {
       throw new Error(`No persistieron las fechas editadas del calendario: ${prestamosConCalendarioEditado.body}`);
+    }
+
+    const primeraCuotaDesplazada = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 2,
+      fechas_cuotas: ['2026-02-01', '2026-02-08']
+    });
+    if (primeraCuotaDesplazada.statusCode !== 400) {
+      throw new Error(`Se esperaba exigir que la primera cuota coincida con el registro del cliente: ${primeraCuotaDesplazada.body}`);
+    }
+
+    const inicioDiferenteAlRegistro = await request('POST', '/api/prestamos', {
+      cliente_id: clienteId,
+      monto: 1000,
+      frecuencia_pago: 'Semanal',
+      numero_cuotas: 2,
+      fecha_inicio: '2026-02-01'
+    });
+    if (inicioDiferenteAlRegistro.statusCode !== 400) {
+      throw new Error(`Se esperaba exigir que el inicio coincida con el registro del cliente: ${inicioDiferenteAlRegistro.body}`);
     }
 
     const inicioInvalido = await request('POST', '/api/prestamos', {

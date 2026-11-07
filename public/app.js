@@ -179,8 +179,12 @@ function actualizarTotalPrestamo() {
         campoFecha.value = fecha;
         campoFecha.required = true;
         campoFecha.dataset.cuotaIndex = String(indice);
+        campoFecha.readOnly = indice === 0;
+        campoFecha.title = indice === 0
+            ? "La primera cuota comienza el día de registro del cliente."
+            : "";
         campoFecha.setCustomValidity(fechasValidas ? "" : "Las fechas deben ser válidas y estar en orden ascendente.");
-        campoFecha.className = "field-control max-w-48";
+        campoFecha.className = `field-control max-w-48${indice === 0 ? " cursor-not-allowed bg-slate-100" : ""}`;
         etiqueta.append(numero, campoFecha);
         elemento.append(etiqueta);
         return elemento;

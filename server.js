@@ -229,9 +229,10 @@ app.post("/api/prestamos", async (req, res) => {
 
         const interes = montoNumber * porcentajeNumber / 100;
         const total = montoNumber + interes;
-        const fecha = fecha_inicio === undefined
-            ? cliente.fecha_registro || fechaHoyColombia()
-            : fecha_inicio;
+        const fecha = cliente.fecha_registro || fechaHoyColombia();
+        if (fecha_inicio !== undefined && fecha_inicio !== fecha) {
+            return res.status(400).json({ error: "La fecha de inicio debe coincidir con la fecha de registro del cliente" });
+        }
         const fechaParseada = typeof fecha === "string" ? new Date(`${fecha}T00:00:00Z`) : null;
         if (typeof fecha !== "string"
             || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
@@ -256,7 +257,7 @@ app.post("/api/prestamos", async (req, res) => {
                 || !/^\d{4}-\d{2}-\d{2}$/.test(fechaCuota)
                 || Number.isNaN(fechaParseada.getTime())
                 || fechaParseada.toISOString().slice(0, 10) !== fechaCuota
-                || (indice === 0 && fechaCuota < fecha)
+                || (indice === 0 && fechaCuota !== fecha)
                 || (indice > 0 && fechaCuota <= fechasCuotas[indice - 1])) {
                 return res.status(400).json({ error: "Las fechas de las cuotas deben ser válidas y estar en orden ascendente" });
             }
