@@ -166,7 +166,7 @@ function actualizarTotalPrestamo() {
     const fechasValidas = fechasCalendario.every((fecha, indice) => validarFechaISO(fecha)
         && (indice === 0 || fecha > fechasCalendario[indice - 1]));
     document.getElementById("pres-fecha-resumen").textContent =
-        `Inicio: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechas[0] ? fechaLegible(fechas[0]) : "Sin fecha"} · Última cuota: ${fechas[fechas.length - 1] ? fechaLegible(fechas[fechas.length - 1]) : "Sin fecha"}${fechasValidas ? "" : " · Revisa que las fechas sean válidas y estén en orden."}`;
+        `Inicio: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechasCalendario[0] ? fechaLegible(fechasCalendario[0]) : "Sin fecha"} · Última cuota: ${fechasCalendario[fechasCalendario.length - 1] ? fechaLegible(fechasCalendario[fechasCalendario.length - 1]) : "Sin fecha"}${fechasValidas ? "" : " · Revisa que las fechas sean válidas y estén en orden."}`;
     calendario.replaceChildren(...fechasCalendario.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
