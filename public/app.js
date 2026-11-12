@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("pres-porcentaje").addEventListener("input", actualizarTotalPrestamo);
     document.getElementById("pres-cuotas").addEventListener("input", actualizarCalendarioAutomatico);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarCalendarioAutomatico);
+    document.getElementById("pres-fecha-inicio").addEventListener("change", actualizarCalendarioAutomatico);
     document.getElementById("pres-calendario").addEventListener("change", actualizarFechaCuota);
     document.getElementById("pres-cliente").addEventListener("change", () => {
         actualizarFechaInicioDesdeCliente();
@@ -262,12 +263,11 @@ function actualizarTotalPrestamo() {
         campoFecha.value = fecha;
         campoFecha.required = true;
         campoFecha.dataset.cuotaIndex = String(indice);
-        campoFecha.readOnly = indice === 0;
         campoFecha.title = indice === 0
-            ? "La primera cuota comienza el día de registro del cliente."
+            ? "Esta fecha también establece el inicio del préstamo."
             : "";
         campoFecha.setCustomValidity(fechasValidas ? "" : "Las fechas deben ser válidas y estar en orden ascendente.");
-        campoFecha.className = `field-control max-w-48${indice === 0 ? " cursor-not-allowed bg-slate-100" : ""}`;
+        campoFecha.className = "field-control max-w-48";
         etiqueta.append(numero, campoFecha);
         elemento.append(etiqueta);
         return elemento;
@@ -283,6 +283,11 @@ function actualizarFechaCuota(evento) {
     const campoFecha = evento.target;
     if (!(campoFecha instanceof HTMLInputElement) || campoFecha.dataset.cuotaIndex === undefined) return;
     const indice = Number(campoFecha.dataset.cuotaIndex);
+    if (indice === 0) {
+        document.getElementById("pres-fecha-inicio").value = campoFecha.value;
+        actualizarCalendarioAutomatico();
+        return;
+    }
     fechasCalendario[indice] = campoFecha.value;
     actualizarTotalPrestamo();
 }

@@ -114,8 +114,8 @@
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <label for="pres-fecha-inicio" class="field-label">Fecha de inicio del calendario <span class="text-rose-600">*</span></label>
-              <input type="text" id="pres-fecha-inicio" readonly required class="field-control cursor-not-allowed bg-slate-100" aria-describedby="pres-fecha-ayuda">
-              <p id="pres-fecha-ayuda" class="mt-1 text-xs text-slate-500">Se establece automáticamente con la fecha de registro del cliente. Puedes ajustar las fechas de cada cuota en el calendario.</p>
+              <input type="date" id="pres-fecha-inicio" required class="field-control" aria-describedby="pres-fecha-ayuda">
+              <p id="pres-fecha-ayuda" class="mt-1 text-xs text-slate-500">Elige desde qué día empieza este préstamo. Al cambiarlo, las cuotas se recalculan; también puedes editar cada fecha del calendario.</p>
             </div>
             <div>
               <label for="pres-monto" class="field-label">Monto a prestar <span class="text-rose-600">*</span></label>

@@ -165,20 +165,20 @@ function fechaColombia(fecha = new Date()) {
       monto: 1000,
       frecuencia_pago: 'Semanal',
       numero_cuotas: 2,
-      fecha_inicio: fechaRegistroPrueba,
-      fechas_cuotas: [fechaRegistroPrueba, '2026-02-20']
+      fecha_inicio: '2026-01-15',
+      fechas_cuotas: ['2026-01-15', '2026-02-20']
     });
     const prestamoConInicioEditadoBody = JSON.parse(prestamoConInicioEditado.body);
     if (prestamoConInicioEditado.statusCode !== 201
-      || prestamoConInicioEditadoBody.fecha_prestamo !== fechaRegistroPrueba
+      || prestamoConInicioEditadoBody.fecha_prestamo !== '2026-01-15'
       || prestamoConInicioEditadoBody.fecha_limite !== '2026-02-20'
-      || JSON.stringify(prestamoConInicioEditadoBody.calendario_cuotas) !== JSON.stringify([fechaRegistroPrueba, '2026-02-20'])) {
+      || JSON.stringify(prestamoConInicioEditadoBody.calendario_cuotas) !== JSON.stringify(['2026-01-15', '2026-02-20'])) {
       throw new Error(`No se guardaron las fechas individuales editadas: ${prestamoConInicioEditado.body}`);
     }
     const prestamosConCalendarioEditado = await request('GET', '/api/prestamos');
     const calendarioEditadoGuardado = JSON.parse(prestamosConCalendarioEditado.body)
       .find(prestamo => prestamo.id === prestamoConInicioEditadoBody.id);
-    if (JSON.stringify(calendarioEditadoGuardado.calendario_cuotas) !== JSON.stringify([fechaRegistroPrueba, '2026-02-20'])) {
+    if (JSON.stringify(calendarioEditadoGuardado.calendario_cuotas) !== JSON.stringify(['2026-01-15', '2026-02-20'])) {
       throw new Error(`No persistieron las fechas editadas del calendario: ${prestamosConCalendarioEditado.body}`);
     }
 
@@ -200,8 +200,11 @@ function fechaColombia(fecha = new Date()) {
       numero_cuotas: 2,
       fecha_inicio: '2026-02-01'
     });
-    if (inicioDiferenteAlRegistro.statusCode !== 400) {
-      throw new Error(`Se esperaba exigir que el inicio coincida con el registro del cliente: ${inicioDiferenteAlRegistro.body}`);
+    const inicioDiferenteAlRegistroBody = JSON.parse(inicioDiferenteAlRegistro.body);
+    if (inicioDiferenteAlRegistro.statusCode !== 201
+      || inicioDiferenteAlRegistroBody.fecha_prestamo !== '2026-02-01'
+      || JSON.stringify(inicioDiferenteAlRegistroBody.calendario_cuotas) !== JSON.stringify(['2026-02-01', '2026-02-08'])) {
+      throw new Error(`El préstamo no comenzó en la fecha elegida: ${inicioDiferenteAlRegistro.body}`);
     }
 
     const inicioInvalido = await request('POST', '/api/prestamos', {

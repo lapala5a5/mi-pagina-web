@@ -3,6 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+class InputElement {
+    constructor() {
+        this.dataset = {};
+    }
+}
+
 function crearElemento() {
     return {
         children: [],
@@ -39,6 +45,7 @@ const contexto = {
         },
         createElement: crearElemento
     },
+    HTMLInputElement: InputElement,
     URLSearchParams,
     window: {}
 };
@@ -81,4 +88,23 @@ assert.equal(filasCalendario[0].children[0].children[1].value, "2026-10-31");
 assert.equal(filasCalendario[1].children[0].children[1].value, "2026-11-07");
 assert.equal(filasCalendario[2].children[0].children[1].value, "2026-11-14");
 
-console.log("El calendario calcula las cuotas desde la fecha de registro del cliente.");
+contexto.actualizarFechaCuota({
+    target: Object.assign(new InputElement(), {
+        dataset: { cuotaIndex: "0" },
+        value: "2026-10-25"
+    })
+});
+assert.equal(elementos.get("pres-fecha-inicio").value, "2026-10-25");
+assert.deepEqual(
+    elementos.get("pres-calendario").children.map(fila => fila.children[0].children[1].value),
+    ["2026-10-25", "2026-11-01", "2026-11-08"]
+);
+
+elementos.get("pres-fecha-inicio").value = "2026-10-20";
+contexto.actualizarCalendarioAutomatico();
+assert.deepEqual(
+    elementos.get("pres-calendario").children.map(fila => fila.children[0].children[1].value),
+    ["2026-10-20", "2026-10-27", "2026-11-03"]
+);
+
+console.log("El calendario permite editar la fecha de inicio y recalcula sus cuotas.");

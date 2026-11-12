@@ -229,10 +229,9 @@ app.post("/api/prestamos", async (req, res) => {
 
         const interes = montoNumber * porcentajeNumber / 100;
         const total = montoNumber + interes;
-        const fecha = cliente.fecha_registro || fechaHoyColombia();
-        if (fecha_inicio !== undefined && fecha_inicio !== fecha) {
-            return res.status(400).json({ error: "La fecha de inicio debe coincidir con la fecha de registro del cliente" });
-        }
+        const fecha = fecha_inicio === undefined
+            ? cliente.fecha_registro || fechaHoyColombia()
+            : fecha_inicio;
         const fechaParseada = typeof fecha === "string" ? new Date(`${fecha}T00:00:00Z`) : null;
         if (typeof fecha !== "string"
             || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
