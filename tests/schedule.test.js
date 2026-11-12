@@ -6,6 +6,18 @@ const vm = require("node:vm");
 class InputElement {
     constructor() {
         this.dataset = {};
+        this.listeners = {};
+    }
+
+    addEventListener(nombre, accion) {
+        this.listeners[nombre] = accion;
+    }
+
+    setCustomValidity() {}
+
+    cambiar(valor) {
+        this.value = valor;
+        this.listeners.change({ target: this });
     }
 }
 
@@ -20,6 +32,16 @@ function crearElemento() {
         },
         replaceChildren(...hijos) {
             this.children = hijos;
+        },
+        querySelectorAll(selector) {
+            if (selector !== "input[data-cuota-index]") return [];
+            return this.children.flatMap(hijo => [
+                ...(hijo instanceof InputElement ? [hijo] : []),
+                ...(hijo.children ? hijo.children.flatMap(nieto => [
+                    ...(nieto instanceof InputElement ? [nieto] : []),
+                    ...(nieto.children ? nieto.children.filter(descendiente => descendiente instanceof InputElement) : [])
+                ]) : [])
+            ]);
         },
         setCustomValidity() {}
     };
@@ -43,7 +65,9 @@ const contexto = {
         getElementById(id) {
             return elementos.get(id);
         },
-        createElement: crearElemento
+        createElement(etiqueta) {
+            return etiqueta === "input" ? new InputElement() : crearElemento();
+        }
     },
     HTMLInputElement: InputElement,
     URLSearchParams,
@@ -88,17 +112,20 @@ assert.equal(filasCalendario[0].children[0].children[1].value, "2026-10-31");
 assert.equal(filasCalendario[1].children[0].children[1].value, "2026-11-07");
 assert.equal(filasCalendario[2].children[0].children[1].value, "2026-11-14");
 
-contexto.actualizarFechaCuota({
-    target: Object.assign(new InputElement(), {
-        dataset: { cuotaIndex: "0" },
-        value: "2026-10-25"
-    })
-});
+const campoPrimeraCuota = filasCalendario[0].children[0].children[1];
+campoPrimeraCuota.dataset.cuotaIndex = "0";
+campoPrimeraCuota.cambiar("2026-10-25");
 assert.equal(elementos.get("pres-fecha-inicio").value, "2026-10-25");
 assert.deepEqual(
     elementos.get("pres-calendario").children.map(fila => fila.children[0].children[1].value),
     ["2026-10-25", "2026-11-01", "2026-11-08"]
 );
+
+const campoSegundaCuota = elementos.get("pres-calendario").children[1].children[0].children[1];
+campoSegundaCuota.cambiar("2026-11-05");
+assert.equal(elementos.get("pres-calendario").children[1].children[0].children[1], campoSegundaCuota,
+    "Al editar una cuota no debe reemplazarse el campo que se está editando.");
+assert.equal(campoSegundaCuota.value, "2026-11-05");
 
 elementos.get("pres-fecha-inicio").value = "2026-10-20";
 contexto.actualizarCalendarioAutomatico();

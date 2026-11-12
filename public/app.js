@@ -27,7 +27,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("pres-cuotas").addEventListener("input", actualizarCalendarioAutomatico);
     document.getElementById("pres-frecuencia").addEventListener("change", actualizarCalendarioAutomatico);
     document.getElementById("pres-fecha-inicio").addEventListener("change", actualizarCalendarioAutomatico);
-    document.getElementById("pres-calendario").addEventListener("change", actualizarFechaCuota);
     document.getElementById("pres-cliente").addEventListener("change", () => {
         actualizarFechaInicioDesdeCliente();
         actualizarCalendarioAutomatico();
@@ -208,7 +207,7 @@ function actualizarTipoCliente() {
     document.getElementById("cli-documento").required = esNuevo;
 }
 
-function actualizarTotalPrestamo() {
+function actualizarTotalPrestamo(actualizarVistaCalendario = true) {
     const monto = Number(document.getElementById("pres-monto").value) || 0;
     const campoPorcentaje = document.getElementById("pres-porcentaje");
     const porcentaje = Number(campoPorcentaje.value);
@@ -251,6 +250,12 @@ function actualizarTotalPrestamo() {
         && (indice === 0 || fecha > fechasCalendario[indice - 1]));
     document.getElementById("pres-fecha-resumen").textContent =
         `Inicio: ${fechaLegible(fechaRegistro)} · Primera cuota: ${fechasCalendario[0] ? fechaLegible(fechasCalendario[0]) : "Sin fecha"} · Última cuota: ${fechasCalendario[fechasCalendario.length - 1] ? fechaLegible(fechasCalendario[fechasCalendario.length - 1]) : "Sin fecha"}${fechasValidas ? "" : " · Revisa que las fechas sean válidas y estén en orden."}`;
+    if (!actualizarVistaCalendario) {
+        calendario.querySelectorAll('input[data-cuota-index]').forEach(campoFecha => {
+            campoFecha.setCustomValidity(fechasValidas ? "" : "Las fechas deben ser válidas y estar en orden ascendente.");
+        });
+        return;
+    }
     calendario.replaceChildren(...fechasCalendario.map((fecha, indice) => {
         const cuotaEnCentavos = centavosPorCuota + (indice < cuotasConCentavoExtra ? 1 : 0);
         const elemento = document.createElement("li");
@@ -268,6 +273,7 @@ function actualizarTotalPrestamo() {
             : "";
         campoFecha.setCustomValidity(fechasValidas ? "" : "Las fechas deben ser válidas y estar en orden ascendente.");
         campoFecha.className = "field-control max-w-48";
+        campoFecha.addEventListener("change", actualizarFechaCuota);
         etiqueta.append(numero, campoFecha);
         elemento.append(etiqueta);
         return elemento;
@@ -289,7 +295,7 @@ function actualizarFechaCuota(evento) {
         return;
     }
     fechasCalendario[indice] = campoFecha.value;
-    actualizarTotalPrestamo();
+    actualizarTotalPrestamo(false);
 }
 
 function validarFechaISO(fecha) {
